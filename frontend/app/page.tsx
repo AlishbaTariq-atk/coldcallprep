@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, FileSearch } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileSearch } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProgressStrip } from "@/components/progress-strip";
 import { ProspectBrief } from "@/components/prospect-brief";
@@ -28,9 +28,15 @@ export default function Home() {
             </div>
             <h1 className="text-sm font-semibold leading-none">ColdCallPrep</h1>
           </div>
-          <p className="hidden text-sm text-muted-foreground sm:block">
-            Every claim is a quote or a labeled inference — never both.
-          </p>
+          <a
+            href="https://github.com/AlishbaTariq-atk/coldcallprep"
+            target="_blank"
+            rel="noreferrer"
+            className="hidden items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground sm:flex"
+          >
+            View source
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
         </div>
       </header>
 

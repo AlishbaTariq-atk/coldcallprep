@@ -132,7 +132,7 @@ source .venv/bin/activate
 pytest tests/ -v
 ```
 
-55 tests, all pure unit tests , no API key or network access required.
+60 tests, all pure unit tests , no API key or network access required.
 This is where the three gates are proven correct in isolation.
 
 ## Isolated tool scripts

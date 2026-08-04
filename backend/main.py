@@ -201,6 +201,8 @@ def _user_facing_error(exc: Exception) -> str:
         A short, user-facing error message.
     """
     message = str(exc)
+    if "api_key" in message or "GROQ_API_KEY" in message:
+        return "The AI provider isn't configured correctly on the server. Please contact the site owner."
     if "rate_limit_exceeded" in message or "code: 429" in message:
         return "The AI model is temporarily rate-limited. Please wait a few minutes and try again."
     if "tool_use_failed" in message or "Failed to call a function" in message:
