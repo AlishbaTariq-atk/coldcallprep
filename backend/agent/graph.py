@@ -40,42 +40,125 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from agent.gates import enforce_source_gate, gate_signals, source_is_usable
+from agent.gates import (
+    enforce_source_gate,
+    filter_contradicted_signals,
+    gate_signals,
+    source_is_usable,
+)
 from agent.state import AgentState
 from agent.tools import (
+    FetchResult,
     extract_stated_facts,
     fetch_source,
     generate_brief,
     infer_opportunity_signals,
+    technical_signals,
 )
 
 
 def fetch_source_node(state: AgentState) -> dict:
+    """Fetch the prospect's URL and record the result and code-verified evidence into state.
+
+    Args:
+        state: Current graph state; only `url` is read.
+
+    Returns:
+        State updates: fetch result fields (success, raw content, social/contact
+        links, load time, viewport/mixed-content/broken-link evidence).
+    """
     result = fetch_source(state["url"])
     return {
         "fetch_succeeded": result.succeeded,
         "raw_content": result.raw_content,
+        "social_links_found": result.social_links_found,
+        "has_contact_link": result.has_contact_link,
+        "load_time_seconds": result.load_time_seconds,
+        "has_viewport_meta": result.has_viewport_meta,
+        "mixed_content_count": result.mixed_content_count,
+        "broken_links_found": result.broken_links_found,
     }
 
 
 def extract_facts_node(state: AgentState) -> dict:
+    """Extract direct-quote stated facts from the fetched page content.
+
+    Args:
+        state: Current graph state; only `raw_content` is read.
+
+    Returns:
+        State update: `stated_facts`.
+    """
     facts = extract_stated_facts(state.get("raw_content") or "")
     return {"stated_facts": facts}
 
 
 def infer_signals_node(state: AgentState) -> dict:
-    candidates = infer_opportunity_signals(state.get("raw_content") or "")
+    """Propose opportunity signals, then apply the Opportunity Gate and contradiction filter.
+
+    Also appends the code-only technical signals (slow load, missing viewport
+    tag, mixed content, broken links) derived from fetch_source_node's evidence.
+
+    Args:
+        state: Current graph state; reads `raw_content`, `stated_facts`, the
+            code-verified link evidence, and the technical evidence fields.
+
+    Returns:
+        State update: `inferred_signals`, containing only signals that
+        survived the Opportunity Gate and the contradiction filter, plus any
+        technical signals.
+    """
+    social_links_found = state.get("social_links_found", [])
+    has_contact_link = state.get("has_contact_link", False)
+
+    candidates = infer_opportunity_signals(
+        state.get("raw_content") or "",
+        stated_facts=state.get("stated_facts", []),
+        social_links_found=social_links_found,
+        has_contact_link=has_contact_link,
+    )
     # THE OPPORTUNITY GATE is applied right here, in code, before anything
     # the model produced is allowed to persist in state.
     gated = gate_signals(candidates)
+    # Hard backstop on top of the gate: drop any signal the model
+    # produced despite code-verified evidence directly contradicting it
+    # (e.g. "no social links" on a page with real social <a href>s).
+    gated = filter_contradicted_signals(gated, social_links_found, has_contact_link)
+
+    # Technical signals never touch the LLM at all — synthesized directly
+    # from fetch_source's measured values (load time, viewport tag, mixed
+    # content, broken links), so they can't be wrong the way a model's
+    # guess could be.
+    fetch_result = FetchResult(
+        succeeded=state.get("fetch_succeeded", False),
+        social_links_found=social_links_found,
+        has_contact_link=has_contact_link,
+        load_time_seconds=state.get("load_time_seconds", 0.0),
+        has_viewport_meta=state.get("has_viewport_meta", True),
+        mixed_content_count=state.get("mixed_content_count", 0),
+        broken_links_found=state.get("broken_links_found", []),
+    )
+    gated = gated + technical_signals(fetch_result)
+
     return {"inferred_signals": gated}
 
 
 def generate_brief_node(state: AgentState) -> dict:
+    """Generate the brief narrative and enforce the Source Gate on the assembled text.
+
+    Args:
+        state: Current graph state; reads `stated_facts`, `inferred_signals`,
+            `raw_notes`, `fetch_succeeded`, and `raw_content`.
+
+    Returns:
+        State update: `source_usable`, `company_snapshot`, `outreach_opener`,
+        and the final `brief_text` (with the Source Gate disclaimer applied
+        if the source wasn't usable).
+    """
     usable = source_is_usable(
         state.get("fetch_succeeded", False), state.get("raw_content")
     )
-    brief_text = generate_brief(
+    generated = generate_brief(
         stated_facts=state.get("stated_facts", []),
         inferred_signals=state.get("inferred_signals", []),
         raw_notes=state.get("raw_notes", ""),
@@ -83,19 +166,35 @@ def generate_brief_node(state: AgentState) -> dict:
     )
     # THE SOURCE GATE, enforced in code as a final pass regardless of what
     # the subagent produced or whether it remembered to mention the gap.
+    # Applied to the full-document brief_text; the UI additionally renders
+    # its own banner directly from source_usable, so the disclaimer isn't
+    # solely dependent on this string ever being read by anyone.
     brief_text = enforce_source_gate(
-        brief_text,
+        generated.brief_text,
         fetch_succeeded=state.get("fetch_succeeded", False),
         raw_content=state.get("raw_content"),
     )
-    return {"brief_text": brief_text}
+    return {
+        "source_usable": usable,
+        "company_snapshot": generated.company_snapshot,
+        "outreach_opener": generated.outreach_opener,
+        "brief_text": brief_text,
+    }
 
 
 def route_after_fetch(state: AgentState) -> str:
-    """
+    """Decide which node runs after fetch_source, based on the Source Gate.
+
     Public (no leading underscore) because main.py's progress-strip driver
     reuses this exact function to predict which node runs next — it must
     never diverge from the graph's own routing decision.
+
+    Args:
+        state: Current graph state; reads `fetch_succeeded` and `raw_content`.
+
+    Returns:
+        "extract_facts" if the fetched content is usable, otherwise
+        "generate_brief" (skipping fact/signal extraction entirely).
     """
     if source_is_usable(state.get("fetch_succeeded", False), state.get("raw_content")):
         return "extract_facts"
@@ -103,6 +202,12 @@ def route_after_fetch(state: AgentState) -> str:
 
 
 def build_graph():
+    """Wire and compile the ColdCallPrep pipeline graph.
+
+    Returns:
+        A compiled LangGraph graph: fetch_source -> [extract_facts ->
+        infer_signals] -> generate_brief, branching per route_after_fetch.
+    """
     graph = StateGraph(AgentState)
     graph.add_node("fetch_source", fetch_source_node)
     graph.add_node("extract_facts", extract_facts_node)

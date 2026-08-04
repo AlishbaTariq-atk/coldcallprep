@@ -25,6 +25,7 @@ export function useRunPolling(): UseRunPollingResult {
   const [error, setError] = useState<string | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** Cancel any pending poll tick, without touching status/error state. */
   const stopPolling = useCallback(() => {
     if (pollTimeoutRef.current) {
       clearTimeout(pollTimeoutRef.current);
@@ -32,8 +33,10 @@ export function useRunPolling(): UseRunPollingResult {
     }
   }, []);
 
+  /** Poll GET /api/run/[runId]/status once per second until the run reaches a terminal state. */
   const poll = useCallback(
     (runId: string) => {
+      /** One status check; reschedules itself unless the run is done or errored. */
       const tick = async () => {
         try {
           const res = await fetch(`/api/run/${runId}/status`, {
@@ -65,6 +68,7 @@ export function useRunPolling(): UseRunPollingResult {
     []
   );
 
+  /** Start a new run via POST /api/run, resetting prior state, then begin polling it. */
   const start = useCallback(
     async (url: string, rawNotes: string) => {
       stopPolling();

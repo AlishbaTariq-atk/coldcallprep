@@ -22,10 +22,17 @@ create table if not exists briefs (
   -- passed the Opportunity Gate (non-empty signal_type + reasoning) ever
   -- land here.
   inferred_signals jsonb not null default '[]'::jsonb,
+  -- The two pieces the brief_writer subagent generates, plus the
+  -- assembled full-document string (see agent/tools.py::GeneratedBrief).
+  company_snapshot text not null default '',
+  outreach_opener text not null default '',
   brief_text text not null,
   -- false when fetch_source failed or returned near-empty content; the
   -- Source Gate requires brief_text to say so explicitly in that case.
   fetch_succeeded boolean not null,
+  -- The actual Source Gate output (fetch succeeded AND content usable) —
+  -- distinct from fetch_succeeded, which only reflects the HTTP result.
+  source_usable boolean not null default false,
   created_at timestamptz not null default now()
 );
 

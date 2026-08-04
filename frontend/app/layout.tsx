@@ -20,6 +20,7 @@ export const metadata: Metadata = {
     "Prospect research that never blends fact and guess — every claim is a quote or a labeled inference.",
 };
 
+/** Root layout: loads the app fonts and applies them globally via CSS variables. */
 export default function RootLayout({
   children,
 }: Readonly<{

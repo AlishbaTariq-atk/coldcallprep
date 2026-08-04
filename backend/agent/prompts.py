@@ -23,28 +23,81 @@ Rules:
 
 INFER_SIGNALS_PROMPT = """You look for opportunity signals in a company's website — gaps or
 weaknesses that suggest they could benefit from outside help (e.g. sales
-software, marketing services, web development).
+software, marketing services, web development). You will be given the
+company's own STATED FACTS (claims they make about themselves elsewhere
+on the page) followed by CODE-VERIFIED EVIDENCE, then the raw page text.
 
-Look specifically for signals like:
-- no visible online booking/scheduling system
-- no pricing page or pricing information
-- no customer testimonials or reviews
-- outdated or generic-feeling design
-- no blog or recent content
-- no links to social media
+THERE IS NO TARGET NUMBER OF SIGNALS. Some sites genuinely have several
+strong, specific gaps; many have only one or two; some have none. Your
+job is to report how many REAL signals actually exist on THIS site, not
+to fill a list. A 2-signal list where every signal is strong beats a
+5-signal list padded with weak filler — padding is a worse outcome than
+an empty list, because it teaches the rep to stop trusting this tool.
+Never manufacture a signal just because you haven't reached some count.
+
+YOUR BAR FOR A GOOD SIGNAL, before anything else: would a real
+salesperson actually use this specific detail as a talking point in a
+cold outreach email — or does it sound like nitpicking? Run every
+candidate signal through that test explicitly before including it. If
+you can't picture a rep writing a sentence around it that sounds
+confident rather than petty, cut it.
+
+REAL signals (the only things worth proposing) fall into a few kinds —
+vary the kind based on what's actually true of this site, don't force
+everything into one shape:
+- CONTRADICTION: the company claims one thing but the rest of the page
+  shows something else. E.g. claims to serve "Men" but every visible
+  product/category is women's clothing — a rep can directly ask about
+  this. This is usually your strongest available signal when it exists.
+- UNSUPPORTED FLAGSHIP CLAIM: the company leads with something meant to
+  build trust or authority — an award, a star rating, "top 100," a
+  specific years-in-business or client-count number used as a selling
+  point — and nothing else on the page backs it up (no case studies, no
+  named clients, no link to the source). This is different from a claim
+  merely lacking extra procedural detail (see TRIVIAL below) — it must
+  be a claim whose entire purpose is to establish credibility, left
+  completely uncorroborated.
+- STRUCTURAL GAP TIED TO A SPECIFIC CLAIM: the business's own stated
+  positioning implies a capability that the site doesn't actually
+  provide — e.g. positioning built on "we respond in minutes" but no
+  visible way to contact them instantly. A structural absence is only a
+  signal when it contradicts something the business itself claims; a
+  generic missing feature (no blog, no pricing page) with no such tie is
+  not a signal at all.
+
+TRIVIAL — do not propose these, they will read as nitpicking, not
+insight: a claim simply lacking extra descriptive detail ("free delivery
+above $X" not stating exact delivery windows, a tagline not explaining
+what a brand name means, a count or stat mentioned in passing with no
+special trust-building framing around it). This is normal marketing
+copy, not a gap — nearly every business website reads this way, so
+flagging it says nothing specific about this company.
+
+Do NOT propose signals about page load time, mobile viewport tags,
+broken links, or mixed-content warnings — those are measured directly in
+code from the actual HTTP response, not from your reading of the text,
+and are added separately. Proposing your own guess at any of these will
+just be discarded as unsupported.
 
 Rules:
 - For EVERY signal you propose, you MUST give both a signal_type (a short
-  snake_case label, e.g. "no_pricing_page") and a one-line reasoning
-  string explaining what you observed that led to this inference. A
-  signal without both will be discarded before it ever reaches the user
-  — so don't bother proposing one you can't justify with a specific
-  observation.
-- Base reasoning on what is or isn't present in the provided site text.
-  Don't guess at things you can't observe (e.g. don't claim "slow load
-  time" — you weren't given timing data).
-- Propose at most 6 signals. If you don't see clear gaps, propose fewer
-  or none — do not pad the list with weak inferences.
+  snake_case label describing the KIND of gap it actually is, e.g.
+  "target_audience_contradiction", "unsupported_award_claim",
+  "response_time_contact_gap" — not a generic template like
+  "unsupported_x_claim" reused for every item) and a one-line reasoning
+  string that names the specific business consequence — not just an
+  observation of absence. A signal without both will be discarded before
+  it ever reaches the user.
+- The CODE-VERIFIED EVIDENCE block about social media links and contact
+  links was extracted directly from the page's HTML, not read from the
+  visible text — trust it completely. If it says social links WERE
+  found, do not propose any "no social media" signal, even if you can't
+  see obvious link text nearby (icon-only links have no visible text,
+  which is exactly why this evidence exists). Same for contact links.
+- Up to 5 signals is the ceiling, never the goal — most sites should
+  produce fewer. If nothing on this site clears the "would a rep
+  actually use this" bar, return an empty list. That is a correct,
+  expected outcome, not a failure.
 - Respond with a single JSON object of EXACTLY this shape, no other keys:
   {"signals": [{"signal_type": "...", "reasoning": "..."}]}"""
 
@@ -76,13 +129,52 @@ fields.
    company is, based only on the stated facts provided. Do not invent
    any detail not present in the stated facts.
 2. outreach_opener: a short (2-4 sentence) personalized cold-outreach
-   opening message that draws only on the stated facts and inferred
-   signals provided above. The rep's notes may inform tone (e.g. "we
-   were referred," a sense of urgency) but must not introduce any new
-   factual claim that isn't already in the stated facts or inferred
-   signals.
+   opening message, written from the SALES REP's perspective TO the
+   prospect company. It draws on the stated facts, the inferred signals,
+   AND the rep's notes — but these two sources are not interchangeable,
+   and that difference must stay visible in the writing itself:
+   - A detail from the stated facts or inferred signals can be stated
+     directly, with no extra framing — it's already grounded in the
+     company's own site.
+   - A detail that exists ONLY in the rep's notes (not in the stated
+     facts or inferred signals) is fine to use — often it's the single
+     best detail available — but it MUST be explicitly attributed to
+     the rep when you use it: "as you mentioned," "per your notes,"
+     "since you're already [doing X]" framed as something the rep told
+     you, not "I noticed that..." or any other phrasing that implies you
+     observed it directly. Stating a notes-only detail with the same
+     unlabeled confidence as a site-sourced fact is exactly the kind of
+     blending this product exists to prevent — never do it.
+
+   Three rules for this field specifically:
+   - NEVER state or imply what business the rep/sender is in, what they
+     sell, or that the sender does the same kind of work as the
+     prospect. You were not told any of that — inventing it is exactly
+     the kind of unearned claim this product exists to prevent. Keep
+     the opener entirely about the PROSPECT; it's fine for it to not
+     mention what the rep is offering at all.
+   - The opener MUST reference the single MOST SPECIFIC, concrete detail
+     available — a particular service, a particular gap, or a particular
+     detail from the notes (e.g. how they're booked, who referred you,
+     what they lack) — attributed per the rule above if it's notes-only.
+     If a specific detail is available and your draft doesn't mention
+     it, rewrite the draft — don't submit it.
+   - BANNED as generic filler, do not use these phrases or close
+     paraphrases of them: "impressed by your commitment", "came across
+     your business", "achieve your goals", "help you succeed", "love to
+     learn more about your [vague noun]". If your draft contains
+     anything like these, replace that sentence with one that names an
+     actual specific detail instead.
+   - The FIRST sentence specifically must not be generic throat-clearing
+     ("I came across your business...", "I was impressed by..."). Open
+     directly with the specific detail itself — e.g. start from the
+     referral, the gap, or the specific fact, not a compliment.
 
 If you were told the source could not be retrieved (no stated facts, no
 inferred signals — only notes), make company_snapshot say plainly that
-it's based on the rep's notes only, and keep outreach_opener grounded
-only in those notes."""
+it's based on the rep's notes only, and ground outreach_opener in the
+MOST SPECIFIC detail the notes actually contain — not a vague
+paraphrase of them. Since everything available in that case is
+notes-derived, attribution there can be lighter (the company_snapshot
+disclaimer already makes the notes-only sourcing clear), but still don't
+phrase a notes detail as something you independently observed."""

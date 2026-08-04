@@ -20,6 +20,9 @@ def main() -> None:
 
     print(f"url: {url}")
     print(f"fetch_succeeded: {result.get('fetch_succeeded')}")
+    print(f"source_usable (the Source Gate's actual verdict): {result.get('source_usable')}")
+    print(f"social_links_found: {result.get('social_links_found')}")
+    print(f"has_contact_link: {result.get('has_contact_link')}")
     print(f"stated_facts: {len(result.get('stated_facts', []))}")
     print(f"inferred_signals: {len(result.get('inferred_signals', []))}")
     print("\n--- brief_text ---\n")

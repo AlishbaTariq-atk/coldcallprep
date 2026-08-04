@@ -51,8 +51,26 @@ class AgentState(TypedDict, total=False):
 
     fetch_succeeded: bool
     raw_content: Optional[str]
+    # Code-verified evidence extracted from the page's real <a href>
+    # attributes (not the visible-text-only raw_content) — ground truth
+    # for the "no social links" / "no contact info" style signals, which
+    # infer_opportunity_signals is unreliable at judging from text alone
+    # since icon-only links have no visible text to read in the first
+    # place. See agent/gates.py::filter_contradicted_signals.
+    social_links_found: list[str]
+    has_contact_link: bool
+    # Also code-verified, also from fetch_source — feeds
+    # agent.tools.technical_signals(), which turns these into signals
+    # directly in code rather than asking the model to guess at them.
+    load_time_seconds: float
+    has_viewport_meta: bool
+    mixed_content_count: int
+    broken_links_found: list[str]
 
     stated_facts: list[StatedFact]
     inferred_signals: list[InferredSignal]
 
+    source_usable: bool
+    company_snapshot: str
+    outreach_opener: str
     brief_text: str
