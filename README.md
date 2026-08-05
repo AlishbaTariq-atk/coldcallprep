@@ -1,5 +1,7 @@
 # ColdCallPrep
 
+**Live demo: [coldcallprep.vercel.app](https://coldcallprep.vercel.app)**
+
 ColdCallPrep is a deep agent harness that fetches a prospect's website,
 quotes what they say about themselves, and flags gaps worth mentioning,
 so a sales rep can walk into a cold call with a research brief they can
