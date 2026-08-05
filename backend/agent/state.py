@@ -24,7 +24,7 @@ class CandidateSignal(BaseModel):
     """
     Raw, ungated output from infer_opportunity_signals. Fields are optional
     because this represents whatever the LLM produced *before* the
-    Opportunity Gate has had a chance to reject it — trusting it at this
+    Opportunity Gate has had a chance to reject it, trusting it at this
     stage would defeat the point of having a gate.
     """
 
@@ -52,14 +52,14 @@ class AgentState(TypedDict, total=False):
     fetch_succeeded: bool
     raw_content: Optional[str]
     # Code-verified evidence extracted from the page's real <a href>
-    # attributes (not the visible-text-only raw_content) — ground truth
+    # attributes (not the visible-text-only raw_content), ground truth
     # for the "no social links" / "no contact info" style signals, which
     # infer_opportunity_signals is unreliable at judging from text alone
     # since icon-only links have no visible text to read in the first
     # place. See agent/gates.py::filter_contradicted_signals.
     social_links_found: list[str]
     has_contact_link: bool
-    # Also code-verified, also from fetch_source — feeds
+    # Also code-verified, also from fetch_source, feeds
     # agent.tools.technical_signals(), which turns these into signals
     # directly in code rather than asking the model to guess at them.
     load_time_seconds: float

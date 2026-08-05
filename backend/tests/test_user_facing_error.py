@@ -23,6 +23,16 @@ class TestUserFacingError:
         exc = Exception("ConnectError: Temporary failure in name resolution")
         assert "Couldn't reach" in _user_facing_error(exc)
 
+    def test_timeout_shows_took_too_long_message(self):
+        exc = Exception("Request timed out.")
+        assert "took too long" in _user_facing_error(exc)
+
+    def test_api_timeout_error_class_name_shows_took_too_long_message(self):
+        import groq
+
+        exc = groq.APITimeoutError(request=None)
+        assert "took too long" in _user_facing_error(exc)
+
     def test_unrecognized_error_falls_back_to_generic_message(self):
         exc = Exception("something completely unexpected happened")
         assert _user_facing_error(exc) == (

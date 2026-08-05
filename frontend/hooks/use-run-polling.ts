@@ -15,7 +15,7 @@ interface UseRunPollingResult {
 /**
  * Starts a run via /api/run, then polls /api/run/[runId]/status every
  * second until it reaches a terminal state. The progress strip should
- * render directly from status.steps — that list only ever contains steps
+ * render directly from status.steps, that list only ever contains steps
  * the backend has actually executed (see run_store.py), so there's
  * nothing here faking progress on a timer.
  */

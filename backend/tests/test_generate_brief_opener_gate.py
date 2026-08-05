@@ -1,6 +1,6 @@
 """
 Proves generate_brief's retry-then-fallback orchestration around the
-Opener Gate works, without any real LLM call — the brief_writer is
+Opener Gate works, without any real LLM call, the brief_writer is
 mocked so this is deterministic and fast, unlike the live tests in
 scripts/test_generate_brief.py.
 """

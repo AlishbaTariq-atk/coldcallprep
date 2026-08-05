@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { RunResultBrief } from "@/lib/types";
 
 /**
- * A fast, purely computational at-a-glance readout — every number here
+ * A fast, purely computational at-a-glance readout, every number here
  * is just a length of an array already in `brief`, and source_status is
  * pre-computed backend-side (agent/gates.py::source_status) from data
  * the pipeline already fetched. No extra calls, no extra latency.

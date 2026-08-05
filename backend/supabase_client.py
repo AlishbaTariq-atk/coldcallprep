@@ -1,7 +1,7 @@
 """
 Writes a completed run to Supabase: one row in `prospects`, one row in
 `briefs` (see supabase/migrations/0001_init.sql for the schema). Called
-exactly once, from main.py, right when a run finishes — not from a
+exactly once, from main.py, right when a run finishes, not from a
 frontend poll, since a run can be polled many times after completion and
 that would risk duplicate rows.
 
@@ -41,7 +41,7 @@ def save_run(url: str, raw_notes: str, brief: dict) -> None:
         url: The prospect URL that was researched.
         raw_notes: The rep's original notes for this prospect.
         brief: The brief dict, in the same shape main.py._serialize_result()
-            builds for the API response — reused as-is rather than
+            builds for the API response, reused as-is rather than
             redefining the field list here.
     """
     client = _get_client()

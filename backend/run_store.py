@@ -72,7 +72,7 @@ def create_run() -> str:
 def start_step(run_id: str, name: RunStepName) -> None:
     """Append a new in-progress step and mark the run as running.
 
-    This is the ONLY way steps enter the list — there is no rewrite/replace
+    This is the ONLY way steps enter the list, there is no rewrite/replace
     path, so a concurrent GET always sees a strict prefix of what will
     eventually be the full list.
 
@@ -135,7 +135,7 @@ def get_run(run_id: str) -> Optional[Run]:
     """Fetch a snapshot of a run's current state.
 
     Returns a shallow snapshot safe for a caller to serialize even while
-    the background run keeps appending — we only ever hold the lock long
+    the background run keeps appending, we only ever hold the lock long
     enough to copy the current list, never while serializing/returning.
 
     Args:

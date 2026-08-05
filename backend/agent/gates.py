@@ -1,6 +1,6 @@
 """
 The three code-enforced gates in this pipeline: Opportunity, Source, and
-Opener. None is a prompt instruction the model is asked to follow — each
+Opener. None is a prompt instruction the model is asked to follow, each
 is a plain Python function with a real conditional, called AFTER the LLM
 produces output and BEFORE that output is allowed into agent state or the
 final brief. If the model misbehaves, these functions are what stop bad
@@ -23,8 +23,8 @@ def opportunity_gate(candidate: CandidateSignal) -> InferredSignal | None:
     THE OPPORTUNITY GATE.
 
     An inferred signal is only admitted if it carries BOTH a non-empty
-    signal_type AND a non-empty reasoning string. Anything else — a missing
-    field, an empty string, a whitespace-only string — is rejected here,
+    signal_type AND a non-empty reasoning string. Anything else, a missing
+    field, an empty string, a whitespace-only string, is rejected here,
     regardless of what the LLM claimed the signal was. Returns None on
     rejection; callers must treat None as "drop this candidate."
     """
@@ -53,14 +53,14 @@ def gate_signals(candidates: list[CandidateSignal]) -> list[InferredSignal]:
 # social media links" on a page that had working, visible social icons.
 # The evidence block in the prompt (see agent/prompts.py) tells the model
 # to trust code-verified link data over its own reading of the text, but
-# a model can still ignore that instruction — observed live, worse than
+# a model can still ignore that instruction, observed live, worse than
 # just ignored: the model's own reasoning text acknowledged "social media
 # links were found in the CODE-VERIFIED EVIDENCE" and proposed the signal
 # anyway ("...but they are not visible on the website itself"), under a
 # signal_type ("no_links_to_social_media") that didn't match the first,
 # narrower version of this filter's exact-phrase check at all. This is
 # the hard backstop: keyword + negation matching, not exact phrases, so
-# it can't be dodged by rewording — a signal contradicted by evidence is
+# it can't be dodged by rewording, a signal contradicted by evidence is
 # dropped in code, unconditionally, regardless of how the model phrases
 # it or whether it complied with the prompt.
 
@@ -91,9 +91,9 @@ def filter_contradicted_signals(
     """
     Drops any signal whose type+reasoning claims something code-verified
     page evidence directly contradicts. Only checks the two topics
-    actually observed failing live (social links, contact links) — this
+    actually observed failing live (social links, contact links), this
     is not a general fact-checker. Topic phrase is "social media"
-    specifically, not bare "social" — a signal about missing "social
+    specifically, not bare "social", a signal about missing "social
     proof" (testimonials) is a different, legitimate signal our own
     prompt asks for, and must not collide with this filter.
     """
@@ -110,7 +110,7 @@ def filter_contradicted_signals(
 
 # --- Source Gate -------------------------------------------------------------
 
-SOURCE_GATE_DISCLAIMER = "Built from your notes only — couldn't retrieve site content."
+SOURCE_GATE_DISCLAIMER = "Built from your notes only, couldn't retrieve site content."
 
 
 def source_is_usable(fetch_succeeded: bool, raw_content: str | None) -> bool:
@@ -137,7 +137,7 @@ PARTIAL_CONTENT_THRESHOLD_CHARS = 1500
 def source_status(fetch_succeeded: bool, raw_content: str | None) -> str:
     """
     A human-readable, three-tier read on how much site content this brief
-    is actually grounded in — built on the same fetch_succeeded/content-
+    is actually grounded in, built on the same fetch_succeeded/content-
     length data as source_is_usable, just with one more cut point for a
     UI summary rather than a pass/fail gate.
     """
@@ -155,7 +155,7 @@ def enforce_source_gate(
     """
     THE SOURCE GATE, part 2: forces the disclaimer onto the brief in code
     when the source isn't usable, rather than trusting the LLM to have
-    remembered to say so. Idempotent — won't double-prepend if the
+    remembered to say so. Idempotent, won't double-prepend if the
     disclaimer is already there.
     """
     if source_is_usable(fetch_succeeded, raw_content):
@@ -170,23 +170,23 @@ def enforce_source_gate(
 # --- Opener Gate --------------------------------------------------------------
 #
 # Added after live testing caught the brief_writer subagent fabricating
-# specific claims in the outreach opener — first "our accounting practice"
+# specific claims in the outreach opener, first "our accounting practice"
 # (confusing sender/prospect identity, fixed by prompting), then "I was
 # referred to your business by a trusted colleague" when nothing in the
 # rep's notes mentioned a referral at all. That second one survived THREE
 # rounds of prompt tightening: a small/fast model has a real, demonstrated
 # tendency to fabricate plausible cold-outreach boilerplate no matter how
 # explicitly it's told not to. This gate is the code-level backstop for
-# that specific, bounded class of fabrication — not a general hallucination
+# that specific, bounded class of fabrication, not a general hallucination
 # detector, but a real check on concrete, observed failure patterns.
 #
 # The referrer-name check below was added after a further live case: notes
 # said only "referred by a mutual contact" (no name given), and the opener
-# invented "our mutual contact, Alex" — a fabricated name attached to a
+# invented "our mutual contact, Alex", a fabricated name attached to a
 # real referral, not caught by the greeting-name check since it wasn't in
 # a "Hi {Name}," greeting. Prompt-only instructions were tried first and
 # failed on retest (see agent/prompts.py's outreach_opener attribution
-# rule) — same lesson as the other two patterns here.
+# rule), same lesson as the other two patterns here.
 
 REFERRAL_ROOTS = ("referr", "recommend", "introduc")
 
@@ -204,12 +204,33 @@ MEETING_REFERENCE_ROOTS = (
     "after our",
 )
 
+# Same reasoning as MEETING_REFERENCE_ROOTS, different failure shape: the
+# opener is addressed TO the prospect, so "you" in the final text always
+# means the prospect, never the rep. A phrase like "as you mentioned"
+# reads, to the prospect, as a claim that THEY told the rep this, but
+# there is no data source in this product for the prospect having said
+# anything to the rep. This was observed live: a notes-derived detail
+# (something the rep already knew, unrelated to the prospect) got
+# rendered as "As you mentioned, the brand caters to...", nonsensical to
+# a stranger receiving a cold email, and a symptom of the exact
+# fact/inference blending this product exists to prevent. Prompt-only
+# fixes for this class of mistake have already failed twice elsewhere in
+# this file, same lesson applies here.
+PROSPECT_ATTRIBUTION_ROOTS = (
+    "as you mentioned",
+    "as you noted",
+    "as you said",
+    "you mentioned that",
+    "per your note",
+    "per your message",
+)
+
 _GREETING_NAME_PATTERN = re.compile(r"\b(?:Hi|Hello|Hey)\s+([A-Z][a-zA-Z]+),")
 # A referral-root word followed, within the same clause-ish window, by a
-# capitalized name-like token — catches "referred by our mutual contact,
+# capitalized name-like token, catches "referred by our mutual contact,
 # Alex" without requiring a specific sentence structure. Bounded and
 # heuristic by design, matching this file's other keyword+proximity
-# checks — not a general named-entity extractor.
+# checks, not a general named-entity extractor.
 _REFERRAL_NAME_PATTERN = re.compile(
     r"\b(?:referr\w*|recommend\w*|introduc\w*)\w*\b[^.!?\n]{0,50}?\b([A-Z][a-z]+)\b"
 )
@@ -270,12 +291,13 @@ def opener_gate_violations(
 
     Checks the outreach opener for concrete, previously-observed
     fabrication patterns (unsupported referral, fabricated prior meeting,
-    a greeted or referral-attributed name not present anywhere it was
-    given to us) and verifies each is actually grounded in what the rep
-    gave us. Returns a list of violation descriptions; an empty list
-    means the opener passes. This targets a bounded, named set of risks —
-    it is not a general hallucination detector, and claims outside these
-    patterns are not checked here.
+    a fabricated claim that the prospect said something to the rep, a
+    greeted or referral-attributed name not present anywhere it was given
+    to us) and verifies each is actually grounded in what the rep gave
+    us. Returns a list of violation descriptions; an empty list means the
+    opener passes. This targets a bounded, named set of risks, it is not
+    a general hallucination detector, and claims outside these patterns
+    are not checked here.
     """
     violations: list[str] = []
 
@@ -288,11 +310,18 @@ def opener_gate_violations(
 
     if _contains_any(outreach_opener, MEETING_REFERENCE_ROOTS):
         # There is no data source in this product for "a prior call or
-        # meeting already happened" — every prospect is a cold-outreach
+        # meeting already happened", every prospect is a cold-outreach
         # target by definition, so this claim is fabricated whenever it
         # appears, regardless of what the notes say.
         violations.append(
             "implies a prior call/meeting/conversation that never happened"
+        )
+
+    if _contains_any(outreach_opener, PROSPECT_ATTRIBUTION_ROOTS):
+        # Same "no prior exchange exists" reasoning as above, always a
+        # violation regardless of notes content, see PROSPECT_ATTRIBUTION_ROOTS.
+        violations.append(
+            "implies the prospect said something to the rep, which never happened"
         )
 
     haystack = (raw_notes + " " + " ".join(f.quote for f in stated_facts)).lower()

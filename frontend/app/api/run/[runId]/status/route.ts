@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 /**
  * Proxies to the backend's /status/{run_id}, polled by the frontend to
- * drive the live progress strip. Deliberately thin — no caching, no
- * transformation — so what the UI sees is exactly what run_store.py has
+ * drive the live progress strip. Deliberately thin, no caching, no
+ * transformation, so what the UI sees is exactly what run_store.py has
  * recorded at poll time.
  */
 export async function GET(

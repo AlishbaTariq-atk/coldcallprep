@@ -3,7 +3,7 @@ LangGraph wiring for the ColdCallPrep pipeline.
 
 Pipeline: fetch_source -> [extract_stated_facts -> infer_opportunity_signals]
 -> generate_brief. The middle two nodes are skipped entirely when the
-Source Gate says the fetched content isn't usable — there's nothing to
+Source Gate says the fetched content isn't usable, there's nothing to
 extract facts or signals from if raw_content is empty/missing, so the
 graph branches straight to generate_brief with empty facts/signals and
 lets the Source Gate force the "built from your notes only" disclaimer
@@ -17,8 +17,8 @@ generate_brief were just "another LLM call in the same chain," nothing
 would stop a future edit to this file from accidentally handing it
 raw_content directly, or from a shared conversation history letting
 exploratory reasoning about the site leak into the brief. The whole
-product claim — "nothing is stated as fact unless it's traceable to real
-content, and the model can't introduce new claims at generation time" —
+product claim, "nothing is stated as fact unless it's traceable to real
+content, and the model can't introduce new claims at generation time",
 would then depend on us remembering to be careful every time this file
 changes.
 
@@ -27,7 +27,7 @@ of relying on our discipline. When the orchestrator's `task` tool invokes
 the `brief_writer` subagent, deepagents resets the subagent's message
 history to a single HumanMessage containing only the task description we
 constructed (see `_validate_and_prepare_state` in
-deepagents/middleware/subagents.py) — it does NOT inherit the
+deepagents/middleware/subagents.py), it does NOT inherit the
 orchestrator's transcript. Combined with the fact that we never put
 raw_content into any state the orchestrator holds in the first place,
 brief_writer's context is guaranteed by the framework to be exactly what
@@ -125,7 +125,7 @@ def infer_signals_node(state: AgentState) -> dict:
     # (e.g. "no social links" on a page with real social <a href>s).
     gated = filter_contradicted_signals(gated, social_links_found, has_contact_link)
 
-    # Technical signals never touch the LLM at all — synthesized directly
+    # Technical signals never touch the LLM at all, synthesized directly
     # from fetch_source's measured values (load time, viewport tag, mixed
     # content, broken links), so they can't be wrong the way a model's
     # guess could be.
@@ -186,7 +186,7 @@ def route_after_fetch(state: AgentState) -> str:
     """Decide which node runs after fetch_source, based on the Source Gate.
 
     Public (no leading underscore) because main.py's progress-strip driver
-    reuses this exact function to predict which node runs next — it must
+    reuses this exact function to predict which node runs next, it must
     never diverge from the graph's own routing decision.
 
     Args:

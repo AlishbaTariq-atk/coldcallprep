@@ -4,7 +4,7 @@ FastAPI app for ColdCallPrep.
 /run kicks off the LangGraph pipeline in a background task and returns a
 run_id immediately. /status/{run_id} is polled by the frontend to drive
 the live progress strip, backed by run_store.py's append-only,
-mid-flight-readable step list — validated live on Railway during the
+mid-flight-readable step list, validated live on Railway during the
 deploy smoke test before any of this real logic existed.
 """
 
@@ -123,7 +123,7 @@ def _execute_pipeline(run_id: str, url: str, raw_notes: str) -> None:
     """Run the LangGraph pipeline in the background, driving run_store as it executes.
 
     Drives run_store step-by-step as the graph ACTUALLY executes, via
-    graph.stream(..., stream_mode="updates") — not a canned animation. Each
+    graph.stream(..., stream_mode="updates"), not a canned animation. Each
     step is marked in_progress right before the node that performs it
     starts running (predicted using the graph's own route_after_fetch, so
     this can never drift out of sync with the graph's real routing), and
@@ -181,7 +181,7 @@ def _execute_pipeline(run_id: str, url: str, raw_notes: str) -> None:
         if pending_step:
             run_store.finish_step(run_id, pending_step, error=True)
         # Full detail server-side for debugging; only a short, non-technical
-        # message reaches the frontend — a raw Groq/API exception is a wall
+        # message reaches the frontend, a raw Groq/API exception is a wall
         # of JSON that means nothing to a rep looking at the UI.
         print(f"Pipeline run {run_id} failed: {exc}")
         run_store.fail_run(run_id, _user_facing_error(exc))
@@ -207,6 +207,8 @@ def _user_facing_error(exc: Exception) -> str:
         return "The AI model is temporarily rate-limited. Please wait a few minutes and try again."
     if "tool_use_failed" in message or "Failed to call a function" in message:
         return "The AI model had trouble formatting its response. Please try again."
+    if "timed out" in message or "APITimeoutError" in message:
+        return "The AI provider took too long to respond. Please try again."
     if "Temporary failure in name resolution" in message or "ConnectError" in message:
         return "Couldn't reach the site or the AI provider. Please check the URL and try again."
     return "Something went wrong while generating this brief. Please try again."

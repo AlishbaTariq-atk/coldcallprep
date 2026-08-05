@@ -1,5 +1,5 @@
 """
-Isolated test for Tool 4 (generate_brief) — feeds it hand-written fake
+Isolated test for Tool 4 (generate_brief), feeds it hand-written fake
 facts/signals directly, with NO real fetch involved, to prove it only
 ever uses what it's explicitly handed. Also exercises the Opener Gate:
 generate_brief runs every outreach_opener through
@@ -25,7 +25,7 @@ def main() -> None:
     inferred_signals = [
         InferredSignal(
             signal_type="no_booking_system",
-            reasoning="No online scheduling widget or booking link found anywhere on the site — contact is phone-only.",
+            reasoning="No online scheduling widget or booking link found anywhere on the site, contact is phone-only.",
         ),
         InferredSignal(
             signal_type="no_pricing_page",
@@ -45,7 +45,7 @@ def main() -> None:
     print()
     print("outreach_opener:", result.outreach_opener)
 
-    # generate_brief already gated this internally — re-checking here just
+    # generate_brief already gated this internally, re-checking here just
     # makes that visible rather than trusting it silently happened.
     violations = opener_gate_violations(result.outreach_opener, raw_notes, stated_facts)
     print()

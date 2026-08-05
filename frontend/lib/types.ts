@@ -2,7 +2,7 @@
  * Shared types for the ColdCallPrep frontend. These mirror the Pydantic
  * models in /backend/agent/state.py. Persistence to Supabase happens
  * backend-side only (backend/supabase_client.py, writing the same shape
- * as RunResultBrief below) — the frontend never talks to Supabase
+ * as RunResultBrief below), the frontend never talks to Supabase
  * directly, so there's no Database/Row type here to keep in sync.
  */
 
@@ -15,7 +15,7 @@ export interface StatedFact {
 }
 
 /**
- * The backend doesn't constrain signal_type to a fixed enum — the
+ * The backend doesn't constrain signal_type to a fixed enum, the
  * Opportunity Gate only requires it to be a non-empty string (see
  * agent/gates.py::opportunity_gate). Treat this as free text and format
  * it generically for display, not as a closed set of known values.
@@ -47,7 +47,7 @@ export interface RunStep {
 
 /**
  * Shape actually returned by POST /run's result. Note this has no
- * id/created_at — those exist on the Supabase rows backend/supabase_client.py
+ * id/created_at, those exist on the Supabase rows backend/supabase_client.py
  * writes, but /run doesn't read them back, so the frontend never sees them.
  */
 export interface RunResultProspect {

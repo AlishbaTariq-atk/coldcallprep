@@ -1,6 +1,6 @@
 """
 Proves agent.tools.technical_signals() is correct in isolation, with no
-LLM call involved — these signals are synthesized directly from measured
+LLM call involved, these signals are synthesized directly from measured
 FetchResult values, not model output, so they're pure functions of
 input data and fully testable without any network access.
 """

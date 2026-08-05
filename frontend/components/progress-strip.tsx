@@ -19,7 +19,7 @@ interface ProgressStripProps {
 
 /**
  * Renders directly from status.steps, which only ever contains steps the
- * backend has actually recorded (see run_store.py) — there is nothing
+ * backend has actually recorded (see run_store.py), there is nothing
  * here on a timer faking progress the pipeline hasn't reached yet.
  */
 export function ProgressStrip({ status }: ProgressStripProps) {

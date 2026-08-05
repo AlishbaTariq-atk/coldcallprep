@@ -1,5 +1,5 @@
 /**
- * Canned inputs for the "Use example prospect" button — zero-typing demo
+ * Canned inputs for the "Use example prospect" button, zero-typing demo
  * data. These are real small/independent businesses chosen to plausibly
  * exhibit the kind of gaps infer_opportunity_signals looks for (no
  * booking system, no pricing page, dated design). If a URL ever goes
@@ -18,7 +18,7 @@ export const EXAMPLE_PROSPECTS: ExampleProspect[] = [
     label: "Family-owned HVAC & plumbing company",
     url: "https://www.866myfamily.com/",
     raw_notes:
-      "Referred by a customer of theirs. Family-run, been around for years — not sure they have much of an online presence beyond the phone number.",
+      "Referred by a customer of theirs. Family-run, been around for years, not sure they have much of an online presence beyond the phone number.",
   },
   {
     label: "Small seasonal donut shop",

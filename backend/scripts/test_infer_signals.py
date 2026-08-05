@@ -1,6 +1,6 @@
 """
 Isolated test for Tool 3 (infer_opportunity_signals), the Opportunity
-Gate, and the contradiction filter — so you can see exactly what each
+Gate, and the contradiction filter, so you can see exactly what each
 stage rejects. Requires GROQ_API_KEY.
 
 Usage (from /backend):

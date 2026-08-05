@@ -130,7 +130,7 @@ class TestEnforceSourceGate:
 
 class TestOpenerGateViolations:
     def test_clean_opener_has_no_violations(self):
-        opener = "Noticed you don't have online booking — worth a quick chat?"
+        opener = "Noticed you don't have online booking, worth a quick chat?"
         notes = "Small business, phone-only booking."
         assert opener_gate_violations(opener, notes, []) == []
 
@@ -148,11 +148,30 @@ class TestOpenerGateViolations:
 
     def test_meeting_reference_always_flagged_even_if_in_notes(self):
         # There's no legitimate data source for "we already spoke" in a
-        # cold-outreach product — this is fabricated whenever it appears.
+        # cold-outreach product, this is fabricated whenever it appears.
         opener = "Great speaking with you on our call last week."
         notes = "We had a call last week and discussed pricing."
         violations = opener_gate_violations(opener, notes, [])
         assert any("prior call" in v for v in violations)
+
+    def test_prospect_attribution_always_flagged_even_if_in_notes(self):
+        # The opener is addressed TO the prospect, so "you" in the final
+        # text means the prospect, "as you mentioned" implies the
+        # prospect told the rep this, which never happened, regardless of
+        # whether the underlying detail really is notes-derived.
+        opener = "As you mentioned, the brand caters to women, men, and children."
+        notes = "The brand caters to women, men, and children."
+        violations = opener_gate_violations(opener, notes, [])
+        assert any("said something to the rep" in v for v in violations)
+
+    def test_prospect_attribution_variant_phrasing_is_flagged(self):
+        opener = "Per your note, you're already booked solid most weeks."
+        violations = opener_gate_violations(opener, "Booked solid most weeks.", [])
+        assert any("said something to the rep" in v for v in violations)
+
+    def test_rep_perspective_attribution_is_not_flagged(self):
+        opener = "I understand you're already booked solid most weeks."
+        assert opener_gate_violations(opener, "Booked solid most weeks.", []) == []
 
     def test_ungrounded_greeting_name_is_flagged(self):
         opener = "Hi Sarah, noticed you don't have a pricing page."
@@ -170,14 +189,14 @@ class TestOpenerGateViolations:
         assert opener_gate_violations(opener, "some notes", []) == []
 
     def test_multiple_violations_all_reported(self):
-        opener = "Hi Sarah, great catching up on our call — you were referred by a friend."
+        opener = "Hi Sarah, great catching up on our call, you were referred by a friend."
         violations = opener_gate_violations(opener, "no relevant notes", [])
         assert len(violations) == 3
 
     def test_fabricated_referrer_name_is_flagged(self):
         # Live case: notes said only "referred by a mutual contact" (no
         # name given anywhere), and the opener invented "our mutual
-        # contact, Alex" — not caught by the greeting-name check since
+        # contact, Alex", not caught by the greeting-name check since
         # it's not in a "Hi {Name}," greeting.
         opener = "I was referred to you by our mutual contact, Alex, and wanted to reach out."
         notes = "Was referred by a mutual contact."
@@ -279,7 +298,7 @@ class TestFilterContradictedSignals:
 
     def test_does_not_collide_with_legitimate_social_proof_signal(self):
         # "social proof" (i.e. testimonials/reviews) is a different,
-        # legitimate signal our own prompt explicitly asks for — it must
+        # legitimate signal our own prompt explicitly asks for, it must
         # not be dropped just because it contains the word "social".
         signals = [
             InferredSignal(

@@ -8,13 +8,13 @@ quote or a labeled inference with its reasoning shown alongside it.
 
 The core discipline is enforced in code, not just prompted for:
 
-- **Opportunity Gate** (`backend/agent/gates.py::opportunity_gate`) , an
+- **Opportunity Gate** (`backend/agent/gates.py::opportunity_gate`), an
   inferred signal only enters the brief if it has both a signal type and
   a non-empty reasoning string.
-- **Source Gate** (`source_is_usable` / `enforce_source_gate`) , if the
+- **Source Gate** (`source_is_usable` / `enforce_source_gate`), if the
   site fetch fails or returns near-empty content, the brief says so
   explicitly instead of inventing facts to fill the gap.
-- **Opener Gate** (`opener_gate_violations`) , the outreach opener is
+- **Opener Gate** (`opener_gate_violations`), the outreach opener is
   checked for fabricated referrals, invented prior meetings, or a
   greeting to a name not present in the notes/facts; a violation
   triggers a retry, then a plain code-templated fallback that can't
@@ -29,23 +29,23 @@ involved.
 flowchart TD
     Rep(["Sales rep"])
 
-    subgraph Vercel["Vercel — frontend/"]
+    subgraph Vercel["Vercel (frontend/)"]
         UI["Next.js UI"]
         Proxy["Route Handlers<br/>/api/run · /api/run/:id/status"]
     end
 
-    subgraph Railway["Railway — backend/ (one persistent FastAPI process)"]
+    subgraph Railway["Railway (backend/, one persistent FastAPI process)"]
         Store[("run_store<br/>in-memory run progress")]
 
         subgraph Pipeline["LangGraph pipeline"]
-            Fetch["fetch_source<br/>HTTP fetch only — no LLM"]
+            Fetch["fetch_source<br/>HTTP fetch only, no LLM"]
             Gate1{"Source Gate<br/>content usable?"}
             Extract["extract_stated_facts"]
             Infer["infer_opportunity_signals"]
             Gate2{{"Opportunity Gate +<br/>contradiction filter"}}
-            Tech["technical_signals<br/>load time / viewport / mixed content — no LLM"]
+            Tech["technical_signals<br/>load time / viewport / mixed content, no LLM"]
             Generate["generate_brief"]
-            Sub[["brief_writer<br/>isolated deepagents subagent —<br/>no raw_content, no shared history"]]
+            Sub[["brief_writer<br/>isolated deepagents subagent,<br/>no raw_content, no shared history"]]
             Gate3{{"Opener Gate<br/>retry once, then code fallback"}}
             Gate4{{"Source Gate<br/>enforced on final text"}}
 
@@ -75,7 +75,7 @@ Diamonds are routing decisions the graph itself makes (`route_after_fetch`);
 hexagons are the three code-enforced gates (`backend/agent/gates.py`) that
 sit between whatever the model produced and what the user is allowed to
 see. Dotted arrows are the only points in the whole pipeline that touch
-an LLM — `fetch_source` and `technical_signals` never do.
+an LLM. `fetch_source` and `technical_signals` never do.
 
 The repo is a monorepo with two independent projects side by side:
 `frontend/` (Next.js) and `backend/` (FastAPI), plus a top-level
@@ -83,7 +83,7 @@ The repo is a monorepo with two independent projects side by side:
 backend.
 
 A completed run is also written to Supabase (`prospects` + `briefs`
-tables) by `backend/supabase_client.py` , one write per run, from the
+tables) by `backend/supabase_client.py`, one write per run, from the
 backend right when the pipeline finishes.
 
 ## Prerequisites
@@ -104,7 +104,7 @@ npm install
 cp .env.example .env.local
 ```
 
-`.env.local` only needs one value for local dev , the default
+`.env.local` only needs one value for local dev, the default
 (`BACKEND_URL=http://localhost:8000`) already matches the backend setup
 below, so you likely don't need to edit it.
 
@@ -121,8 +121,8 @@ cp .env.example .env
 ```
 
 Edit `backend/.env` and fill in:
-- `GROQ_API_KEY` , from [console.groq.com](https://console.groq.com)
-- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` , from your Supabase
+- `GROQ_API_KEY`, from [console.groq.com](https://console.groq.com)
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`, from your Supabase
   project's **Settings → API** (use the service_role / "Secret key",
   not the anon/publishable one)
 
@@ -142,26 +142,26 @@ npm run dev:all
 
 This starts both the backend (`uvicorn`, auto-loading `backend/.env`,
 watching `backend/` for changes) and the frontend (`next dev`) together,
-with labeled/colored output. Ctrl+C once stops both , no orphaned
+with labeled/colored output. Ctrl+C once stops both, no orphaned
 processes.
 
 Prefer two separate terminals (e.g. to see backend logs on their own)?
 
 ```bash
-# Terminal 1 , backend (from the project root)
+# Terminal 1, backend (from the project root)
 cd backend && source .venv/bin/activate
 uvicorn main:app --reload --port 8000
 ```
 
 ```bash
-# Terminal 2 , frontend (from the project root)
+# Terminal 2, frontend (from the project root)
 cd frontend
 npm run dev
 ```
 
 Open **http://localhost:3000**, click **Example** to fill in a demo
 prospect with zero typing, then **Generate Brief**. The progress strip
-reflects real backend steps as they happen , the "Writing brief" step
+reflects real backend steps as they happen, the "Writing brief" step
 (an isolated LLM subagent call) is usually the slowest, taking up to
 ~30–60s.
 
@@ -170,19 +170,19 @@ reflects real backend steps as they happen , the "Writing brief" step
 Frontend and backend deploy independently, to Vercel and Railway
 respectively.
 
-**Vercel** — set **Root Directory** to `frontend` when importing this
+**Vercel**: set **Root Directory** to `frontend` when importing this
 repo; Vercel may auto-detect `backend/` as a second deployable service,
 but don't accept that. The backend's in-memory run store and its
 background pipeline execution both need one persistent process, not
-serverless functions — that's what Railway is for. Add one environment
+serverless functions. That's what Railway is for. Add one environment
 variable: `BACKEND_URL`, pointing at the Railway backend's URL.
 
-**Railway** — deploys `backend/` via the included `Procfile`.
+**Railway**: deploys `backend/` via the included `Procfile`.
 `backend/.env` is gitignored and never reaches Railway, so
 `GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` must be
 set directly in Railway's dashboard (**Variables** tab). Without them
-the service builds and starts fine — `/health` will even return
-`200 OK` — but every real run fails at the first LLM call.
+the service builds and starts fine, `/health` will even return
+`200 OK`, but every real run fails at the first LLM call.
 
 ## Tests
 
@@ -192,7 +192,7 @@ source .venv/bin/activate
 pytest tests/ -v
 ```
 
-60 tests, all pure unit tests , no API key or network access required.
+65 tests, all pure unit tests, no API key or network access required.
 This is where the three gates are proven correct in isolation.
 
 ## Isolated tool scripts
@@ -210,7 +210,7 @@ GROQ_API_KEY=... python scripts/test_full_pipeline.py <url> "<notes>"  # all thr
 
 ## What's not built
 
-- No auth , this is a single-user take-home demo. The Supabase RLS
+- No auth, this is a single-user take-home demo. The Supabase RLS
   policies allow all access via the service-role key.
-- No UI for browsing past runs , completed runs are persisted to
+- No UI for browsing past runs, completed runs are persisted to
   Supabase but the frontend doesn't read them back or show history.

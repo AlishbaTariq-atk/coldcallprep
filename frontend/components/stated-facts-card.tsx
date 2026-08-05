@@ -11,7 +11,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 /**
  * Neutral treatment (slate border, secondary badge) is the deliberate
- * counterpoint to InferredSignalsCard's amber treatment — the contrast
+ * counterpoint to InferredSignalsCard's amber treatment, the contrast
  * between the two IS the fact/inference distinction, made visible.
  */
 export function StatedFactsCard({ facts }: { facts: StatedFact[] }) {

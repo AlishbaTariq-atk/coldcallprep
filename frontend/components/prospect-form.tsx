@@ -58,7 +58,7 @@ export function ProspectForm({ onSubmit, isRunning }: ProspectFormProps) {
         </Label>
         <Textarea
           id="notes"
-          placeholder="Anything you already know — how you got this lead, prior conversations, etc."
+          placeholder="Anything you already know, how you got this lead, prior conversations, etc."
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           disabled={isRunning}

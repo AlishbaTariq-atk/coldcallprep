@@ -1,14 +1,14 @@
 """
 The four single-purpose tools described in the product brief:
 
-  1. fetch_source            — HTTP fetch only. Never touches an LLM.
-  2. extract_stated_facts    — pulls direct quotes. Nothing else.
-  3. infer_opportunity_signals — proposes CANDIDATE signals. These are
+  1. fetch_source: HTTP fetch only. Never touches an LLM.
+  2. extract_stated_facts: pulls direct quotes. Nothing else.
+  3. infer_opportunity_signals: proposes CANDIDATE signals. These are
      UNGATED; callers must run them through agent.gates.gate_signals
      before trusting them anywhere else in the pipeline. This function
-     does not gate its own output — see agent/graph.py for where that
+     does not gate its own output, see agent/graph.py for where that
      happens.
-  4. generate_brief          — delegates ONLY the two genuinely generative
+  4. generate_brief: delegates ONLY the two genuinely generative
      pieces (company snapshot, outreach opener) to an isolated deepagents
      subagent; the stated-facts and inferred-signals sections are
      rendered directly from typed state, in code, with no LLM involved.
@@ -40,16 +40,26 @@ from agent.state import CandidateSignal, InferredSignal, StatedFact
 
 # Groq-hosted model. 70B is more reliable at following strict negative
 # constraints (identity confusion, fabrication) than the 8B fallback
-# below — the Opener Gate exists as a code-level backstop regardless of
+# below, the Opener Gate exists as a code-level backstop regardless of
 # which one is active, but a better baseline model means the gate has to
 # do less work. Has a low free-tier daily token cap; swap to the 8B
 # variant if that cap is hit.
 #
 # Read from GROQ_MODEL_NAME so the model can be swapped from Railway's
-# dashboard (env var + restart) with no code push/redeploy — useful if
+# dashboard (env var + restart) with no code push/redeploy, useful if
 # the active model's rate limit gets hit close to a deadline.
 DEFAULT_MODEL_NAME = "llama-3.1-8b-instant"
 MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", DEFAULT_MODEL_NAME)
+
+# ChatGroq's own default for request_timeout is None, and the underlying
+# groq SDK treats an *explicit* None as "disable the timeout entirely,"
+# not "use a sane default" (that only happens when the argument is left
+# unset). Left at the default, a single stalled request to Groq can hang
+# this call forever, with no bound and nothing for the retry logic below
+# to ever catch, since the call never returns to trigger a retry. This is
+# a real, observed failure mode, not a theoretical one, every Groq call
+# in this file must pass this explicitly.
+REQUEST_TIMEOUT_SECONDS = 30.0
 
 
 def _build_model(temperature: float = 0) -> ChatGroq:
@@ -59,14 +69,17 @@ def _build_model(temperature: float = 0) -> ChatGroq:
         temperature: Sampling temperature. Defaults to 0 (deterministic).
 
     Returns:
-        A configured ChatGroq instance using MODEL_NAME.
+        A configured ChatGroq instance using MODEL_NAME, bounded by
+        REQUEST_TIMEOUT_SECONDS.
     """
-    return ChatGroq(model=MODEL_NAME, temperature=temperature)
+    return ChatGroq(
+        model=MODEL_NAME, temperature=temperature, request_timeout=REQUEST_TIMEOUT_SECONDS
+    )
 
 
 FETCH_TIMEOUT_SECONDS = 15.0
 # A single, legitimate, human-initiated page fetch (one rep, one URL, no
-# crawling) — using a realistic browser UA + headers here so ordinary bot
+# crawling), using a realistic browser UA + headers here so ordinary bot
 # -mitigation (Cloudflare/Radware, seen live on one of the example sites)
 # doesn't false-positive-block it the way a bare httpx/library UA can.
 FETCH_HEADERS = {
@@ -80,7 +93,7 @@ FETCH_HEADERS = {
 MAX_CONTENT_CHARS = 12000
 STRUCTURED_OUTPUT_RETRY_ATTEMPTS = 3
 # Transient DNS/connection blips are common and shouldn't trip the Source
-# Gate on their own — observed live: the same known-good URL failed on a
+# Gate on their own, observed live: the same known-good URL failed on a
 # first attempt and succeeded on a second, with nothing wrong with the
 # site or the code. Only a fetch that fails on every attempt counts as a
 # real failure.
@@ -90,8 +103,8 @@ FETCH_RETRY_DELAY_SECONDS = 1.0
 # Used to detect real social links from <a href> attributes directly,
 # rather than asking the model to infer their absence from visible text.
 # Icon-only social links (an <a> wrapping just an SVG, no visible text)
-# are invisible to a text-only extraction — get_text() drops href
-# entirely — which is exactly what caused a live, reported false
+# are invisible to a text-only extraction, get_text() drops href
+# entirely, which is exactly what caused a live, reported false
 # "no social links" signal on a page that had working social icons.
 SOCIAL_MEDIA_DOMAINS = (
     "facebook.com",
@@ -107,10 +120,10 @@ SOCIAL_MEDIA_DOMAINS = (
 
 # Technical checks below are all derived from data we already fetched (no
 # extra requests) except the broken-link sample, which is deliberately
-# bounded — a handful of same-origin links, short timeout, best-effort —
+# bounded, a handful of same-origin links, short timeout, best-effort,
 # so it stays cheap and can never meaningfully slow down or break the
 # fetch itself. These exist to feed agent.tools.technical_signals(),
-# which turns them into signals directly in code — no LLM opinion
+# which turns them into signals directly in code, no LLM opinion
 # involved, unlike the rest of infer_opportunity_signals's output.
 SLOW_LOAD_THRESHOLD_SECONDS = 2.5
 BROKEN_LINK_SAMPLE_SIZE = 3
@@ -137,7 +150,7 @@ class FetchResult(BaseModel):
 def _check_sample_links_for_breakage(base_url: str, hrefs: list[str]) -> list[str]:
     """
     Best-effort: HEAD-checks up to BROKEN_LINK_SAMPLE_SIZE same-origin
-    links found on the page. Never raises — any individual check that
+    links found on the page. Never raises, any individual check that
     times out or errors is treated as "couldn't verify," not "broken,"
     since the goal is a cheap, honest signal, not a full link-audit tool.
     """
@@ -169,7 +182,7 @@ def _check_sample_links_for_breakage(base_url: str, hrefs: list[str]) -> list[st
             if resp.status_code >= 400:
                 broken.append(link)
         except httpx.HTTPError:
-            continue  # unverifiable, not counted as broken — avoid false positives
+            continue  # unverifiable, not counted as broken, avoid false positives
     return broken
 
 
@@ -177,15 +190,15 @@ def fetch_source(url: str) -> FetchResult:
     """
     Fetch the given URL and return its visible text content, stripped of
     scripts/styles/markup, plus code-verified evidence: social/contact
-    links (from <a href> attributes — see SOCIAL_MEDIA_DOMAINS for why
+    links (from <a href> attributes, see SOCIAL_MEDIA_DOMAINS for why
     this can't come from text alone), page load time, presence of a
     mobile viewport meta tag, count of mixed-content (http:// on an
     https:// page) resource references, and a small best-effort sample
-    of same-origin links checked for breakage. Never raises — any
+    of same-origin links checked for breakage. Never raises, any
     failure (timeout, DNS, non-2xx, connection refused) is captured as
     succeeded=False so the Source Gate can act on it instead of the
     request crashing the pipeline. Retries up to FETCH_MAX_ATTEMPTS times
-    before giving up — only a fetch that fails on every attempt is
+    before giving up, only a fetch that fails on every attempt is
     treated as a real failure.
     """
     last_error: str | None = None
@@ -258,13 +271,13 @@ def fetch_source(url: str) -> FetchResult:
 def technical_signals(fetch_result: FetchResult) -> list[InferredSignal]:
     """
     Synthesizes InferredSignal objects directly from FetchResult's
-    technical fields — deliberately NOT going through the LLM at all.
+    technical fields, deliberately NOT going through the LLM at all.
     "Their site took 4.2s to load on this fetch" is a fact we measured;
     asking a model to eyeball text and guess at load time or a missing
     meta tag would just reintroduce the accuracy problem
     filter_contradicted_signals exists to catch elsewhere. Each check
     only produces a signal when the underlying condition is actually
-    true — a fast, mobile-friendly, link-healthy site gets none of these,
+    true, a fast, mobile-friendly, link-healthy site gets none of these,
     not a "no issues found" filler entry.
     """
     signals: list[InferredSignal] = []
@@ -277,7 +290,7 @@ def technical_signals(fetch_result: FetchResult) -> list[InferredSignal]:
                     f"The site took {fetch_result.load_time_seconds:.1f}s to "
                     f"respond on this fetch, above the "
                     f"{SLOW_LOAD_THRESHOLD_SECONDS:.1f}s threshold for a "
-                    "reasonably fast page — slow load times measurably hurt "
+                    "reasonably fast page, slow load times measurably hurt "
                     "conversion and search ranking."
                 ),
             )
@@ -289,7 +302,7 @@ def technical_signals(fetch_result: FetchResult) -> list[InferredSignal]:
                 signal_type="no_mobile_viewport_tag",
                 reasoning=(
                     "No mobile viewport meta tag was found in the page "
-                    "<head> — a strong indicator the site was never adapted "
+                    "<head>, a strong indicator the site was never adapted "
                     "for mobile screens, where most local searches happen."
                 ),
             )
@@ -301,7 +314,7 @@ def technical_signals(fetch_result: FetchResult) -> list[InferredSignal]:
                 signal_type="mixed_content_warnings",
                 reasoning=(
                     f"{fetch_result.mixed_content_count} resource(s) on this "
-                    "HTTPS page are loaded over plain HTTP — browsers flag "
+                    "HTTPS page are loaded over plain HTTP, browsers flag "
                     "this as a security warning to visitors, which erodes "
                     "trust right at the point of first contact."
                 ),
@@ -317,7 +330,7 @@ def technical_signals(fetch_result: FetchResult) -> list[InferredSignal]:
                 reasoning=(
                     f"{count} link{plural} sampled on the page returned an "
                     f"error when checked directly (e.g. "
-                    f"{fetch_result.broken_links_found[0]}) — broken links "
+                    f"{fetch_result.broken_links_found[0]}), broken links "
                     "signal an unmaintained site to both visitors and "
                     "search engines."
                 ),
@@ -343,13 +356,13 @@ def extract_stated_facts(
     Pull direct quotes about services, positioning, and target audience
     from raw site text. Structured output enforces the category/quote
     shape; the "must be a direct quote, not a paraphrase" rule lives in
-    the prompt, not in code — unlike the two gates, this one genuinely
+    the prompt, not in code, unlike the two gates, this one genuinely
     relies on the model following instructions.
     """
     llm = model or _build_model()
     # Smaller/faster models occasionally mangle the tool-call formatting
     # for structured output (observed live with llama-3.1-8b-instant on
-    # verbose responses) — retry a couple of times before giving up,
+    # verbose responses), retry a couple of times before giving up,
     # since the same request can succeed on a subsequent attempt.
     structured_llm = llm.with_structured_output(
         _StatedFactsResponse, method="json_mode"
@@ -381,7 +394,7 @@ def infer_opportunity_signals(
 ) -> list[CandidateSignal]:
     """
     Propose opportunity signals based on what's missing or weak on the
-    site. Output here is UNGATED — signal_type/reasoning may be
+    site. Output here is UNGATED, signal_type/reasoning may be
     incomplete or absent. This function intentionally does not filter its
     own output; agent/graph.py::infer_signals_node is what calls
     agent.gates.gate_signals (and agent.gates.filter_contradicted_signals)
@@ -389,13 +402,13 @@ def infer_opportunity_signals(
 
     stated_facts is passed in specifically so the model can cross-
     reference the company's own claims against what else is actually on
-    the page — an unsupported claim ("top 100," "5.0 stars") is a much
+    the page, an unsupported claim ("top 100," "5.0 stars") is a much
     stronger, more specific signal than a generic checklist item, but the
     model can only find it if it's given the claims to check.
 
     social_links_found / has_contact_link are code-verified evidence from
     fetch_source's real <a href> parsing, prepended as ground truth the
-    model is told to trust over its own reading of the text — but since a
+    model is told to trust over its own reading of the text, but since a
     model can still ignore that instruction (observed live), the caller
     additionally hard-filters any contradicted signal afterward rather
     than relying on the prompt alone.
@@ -406,15 +419,15 @@ def infer_opportunity_signals(
     facts_block = (
         _render_stated_facts(stated_facts)
         if stated_facts
-        else "(none extracted — no claims to cross-reference)"
+        else "(none extracted, no claims to cross-reference)"
     )
     evidence_block = (
         "STATED FACTS (claims this company makes about itself elsewhere on "
-        "the page — cross-reference these against the raw text below for "
+        "the page, cross-reference these against the raw text below for "
         "unsupported-claim signals):\n"
         f"{facts_block}\n\n"
         "CODE-VERIFIED EVIDENCE (trust this over your own reading of the "
-        "text below — it was extracted directly from the page's HTML "
+        "text below, it was extracted directly from the page's HTML "
         "links, not guessed from visible text):\n"
         f"- Social media links found on this page: "
         f"{', '.join(social_links_found) if social_links_found else 'none found'}\n"
@@ -446,7 +459,7 @@ class BriefNarrative(BaseModel):
     The ONLY two things the brief_writer subagent is trusted to generate.
     Everything else in the final brief (stated facts, inferred signals)
     is rendered directly from typed state by _render_stated_facts /
-    _render_inferred_signals below — no LLM transcription involved, so
+    _render_inferred_signals below, no LLM transcription involved, so
     there's no chance of it relabeling a signal, merging two together, or
     pulling something in from raw_notes.
     """
@@ -493,7 +506,7 @@ def _render_stated_facts(stated_facts: list[StatedFact]) -> str:
         A newline-separated bullet list, or a placeholder string if empty.
     """
     if not stated_facts:
-        return "(none — no stated facts were extracted.)"
+        return "(none, no stated facts were extracted.)"
     # Single quotes, not double: this text gets embedded as a JSON string
     # argument inside the orchestrator's `task` tool call, and unescaped
     # double quotes there reliably triggered Groq's native tool-calling
@@ -521,7 +534,7 @@ class GeneratedBrief(BaseModel):
     """
     Full result of generate_brief. company_snapshot/outreach_opener come
     from the isolated subagent; brief_text is the assembled full-document
-    string (used for Supabase storage / copy-all — see enforce_source_gate
+    string (used for Supabase storage / copy-all, see enforce_source_gate
     in graph.py, which operates on this field). The frontend renders each
     section from its own field rather than parsing brief_text, so the
     stated-fact/inferred-signal visual distinction never depends on
@@ -549,7 +562,7 @@ def generate_brief(
     facts and inferred signals sections are rendered directly from the
     already-gated typed data, in code, with no model involved. The only
     inputs forwarded to the subagent are the pre-gated facts/signals
-    passed in as arguments here — never raw_content, never the upstream
+    passed in as arguments here, never raw_content, never the upstream
     conversation.
 
     The outreach_opener specifically passes through the OPENER GATE
@@ -558,7 +571,7 @@ def generate_brief(
     not grounded in what it was given, we retry once with the violation
     named explicitly, and if it still fails, fall back to a plain
     code-templated opener that can never violate the gate. See
-    agent/gates.py's module comment for why this exists — live testing
+    agent/gates.py's module comment for why this exists, live testing
     caught this exact fabrication pattern surviving prompt-only fixes.
     """
     facts_block = _render_stated_facts(stated_facts)
@@ -568,7 +581,7 @@ def generate_brief(
     task_description = (
         f"Source usable: {source_usable}\n\n"
         f"Stated facts (direct quotes):\n{facts_block}\n\n"
-        f"Inferred signals (already gated — each has a type and reasoning):\n"
+        f"Inferred signals (already gated, each has a type and reasoning):\n"
         f"{signals_block}\n\n"
         f"Rep's notes:\n{notes_block}\n\n"
         "Write the company_snapshot and outreach_opener now."
@@ -583,7 +596,7 @@ def generate_brief(
             f"{task_description}\n\n"
             "Your previous outreach_opener was REJECTED for these specific "
             f"reasons: {'; '.join(violations)}. Write a new outreach_opener "
-            "that fixes this — do not repeat the same claim in any form."
+            "that fixes this, do not repeat the same claim in any form."
         )
         narrative = _invoke_brief_writer(correction)
         violations = opener_gate_violations(narrative.outreach_opener, raw_notes, stated_facts)
@@ -592,7 +605,7 @@ def generate_brief(
     if violations:
         # Code-level fallback: never let a gate-failing opener reach the
         # user, even after a retry. This is deliberately plain rather
-        # than clever — it can't fabricate anything because it doesn't
+        # than clever, it can't fabricate anything because it doesn't
         # generate anything, just relays the notes verbatim.
         narrative = BriefNarrative(
             company_snapshot=narrative.company_snapshot,
@@ -616,7 +629,7 @@ def generate_brief(
 BRIEF_WRITER_MAX_ATTEMPTS = 3
 # Live testing showed this isn't a transient glitch: at temperature=0 the
 # model regenerates the exact same malformed `<function=...>` text on
-# every retry against the same prompt — a deterministic model produces a
+# every retry against the same prompt, a deterministic model produces a
 # deterministic failure, so retrying unchanged never helps. Only the
 # first attempt uses temperature=0 (matches every other call in this
 # pipeline); retries resample at a non-zero temperature specifically so
@@ -660,7 +673,7 @@ def _fallback_opener(raw_notes: str) -> str:
     """Build a plain, code-templated opener that cannot violate the Opener Gate.
 
     Used when the brief_writer subagent's generated opener still fails the
-    Opener Gate after a retry — relays the rep's notes verbatim instead of
+    Opener Gate after a retry, relays the rep's notes verbatim instead of
     generating new text, so it can't fabricate anything.
 
     Args:
@@ -685,7 +698,7 @@ def _fallback_opener(raw_notes: str) -> str:
 def _extract_narrative(result: dict) -> BriefNarrative:
     """
     Don't trust the orchestrator's own final message to be a faithful,
-    unedited relay of what the subagent wrote — extract the subagent's
+    unedited relay of what the subagent wrote, extract the subagent's
     actual structured output directly from the ToolMessage the `task`
     call produced (deepagents JSON-serializes response_format results
     into that ToolMessage's content).
@@ -695,5 +708,5 @@ def _extract_narrative(result: dict) -> BriefNarrative:
             return BriefNarrative.model_validate_json(str(message.content))
 
     raise RuntimeError(
-        "brief_writer subagent was never invoked — no ToolMessage found in result"
+        "brief_writer subagent was never invoked, no ToolMessage found in result"
     )

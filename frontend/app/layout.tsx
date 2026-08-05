@@ -17,7 +17,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "ColdCallPrep",
   description:
-    "Prospect research that never blends fact and guess — every claim is a quote or a labeled inference.",
+    "Prospect research where every claim is a direct quote or a labeled inference, enforced in code.",
 };
 
 /** Root layout: loads the app fonts and applies them globally via CSS variables. */

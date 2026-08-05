@@ -3,7 +3,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 /**
  * Rendered directly from brief.source_usable (a boolean the backend
- * computed via agent.gates.source_is_usable) — this banner's presence
+ * computed via agent.gates.source_is_usable), this banner's presence
  * doesn't depend on the model having remembered to mention the gap in
  * its own text. Same amber thread as the "INFERRED" treatment: both mean
  * "this isn't a verified fact," just at different scopes (one signal vs.
@@ -18,7 +18,7 @@ export function SourceGateBanner() {
       </AlertTitle>
       <AlertDescription className="text-amber-800/90 dark:text-amber-300/80">
         We couldn&apos;t retrieve content from this site, so nothing below is
-        sourced from it — everything here comes only from the notes you
+        sourced from it. Everything here comes only from the notes you
         provided.
       </AlertDescription>
     </Alert>

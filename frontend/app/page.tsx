@@ -9,7 +9,7 @@ import { useRunPolling } from "@/hooks/use-run-polling";
 
 /**
  * Main page: prospect form on the left, live progress + resulting brief on
- * the right. All state lives in useRunPolling — this component is purely
+ * the right. All state lives in useRunPolling, this component is purely
  * presentational routing of that state to the right child component.
  */
 export default function Home() {
@@ -41,18 +41,18 @@ export default function Home() {
       </header>
 
       <main className="mx-auto max-w-[1440px] px-6 py-10 lg:px-10">
-        <p className="mb-8 max-w-2xl text-base leading-relaxed text-foreground">
-          Paste a company&apos;s website and get a sales-ready brief in under
-          a minute — every claim is either a direct quote from their site or
-          a clearly labeled inference, so you always know what&apos;s real
-          before you reach out.
+        <p className="mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground">
+          Every claim in a brief is either a direct quote from the
+          prospect&apos;s site or a labeled inference with its reasoning
+          shown next to it, enforced in code before it ever reaches you,
+          not just prompted for.
         </p>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[380px_1fr]">
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div className="rounded-lg border bg-card p-6">
               <h2 className="mb-1 text-sm font-semibold">Research a prospect</h2>
-              <p className="mb-5 text-sm text-muted-foreground">
+              <p className="mb-5 text-sm font-medium text-foreground">
                 Paste a company URL. We&apos;ll fetch the site, quote what
                 they say, and flag gaps worth mentioning.
               </p>

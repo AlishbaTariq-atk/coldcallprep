@@ -11,7 +11,7 @@ function formatSignalType(signalType: string): string {
 /**
  * This is the single most important visual distinction in the product:
  * every item here carries the amber border + "INFERRED" badge +
- * reasoning-underneath treatment, everywhere it appears — never silently
+ * reasoning-underneath treatment, everywhere it appears, never silently
  * blended in with a stated fact. See StatedFactsCard for the neutral
  * counterpoint this is deliberately contrasted against.
  */
