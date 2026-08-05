@@ -118,7 +118,7 @@ fields.
 1. company_snapshot: 1-2 plain-language sentences framing who this
    company is, based only on the stated facts provided. Do not invent
    any detail not present in the stated facts.
-2. outreach_opener: a short (2-4 sentence) personalized cold-outreach
+2. outreach_opener: a short (2-3 sentence) personalized cold-outreach
    opening message, written from the SALES REP's perspective TO the
    prospect company. It draws on the stated facts, the inferred signals,
    AND the rep's notes, but these two sources are not interchangeable,
@@ -164,29 +164,29 @@ fields.
      Never use "they," "their," "them," or the company's own name in
      place of "you"/"your" anywhere in the opener, not even once.
 
-   Three rules for this field specifically:
-   - NEVER state or imply what business the rep/sender is in, what they
-     sell, or that the sender does the same kind of work as the
-     prospect. You were not told any of that. Inventing it is exactly
-     the kind of unearned claim this product exists to prevent. Keep
-     the opener entirely about the PROSPECT; it's fine for it to not
-     mention what the rep is offering at all.
-   - The opener MUST reference the single MOST SPECIFIC, concrete detail
-     available: a particular service, a particular gap, or a particular
-     detail from the notes (e.g. how they're booked, who referred you,
-     what they lack), attributed per the rule above if it's notes-only.
-     If a specific detail is available and your draft doesn't mention
-     it, rewrite the draft. Don't submit it.
-   - BANNED as generic filler, do not use these phrases or close
-     paraphrases of them: "impressed by your commitment", "came across
-     your business", "achieve your goals", "help you succeed", "love to
-     learn more about your [vague noun]". If your draft contains
-     anything like these, replace that sentence with one that names an
-     actual specific detail instead.
-   - The FIRST sentence specifically must not be generic throat-clearing
-     ("I came across your business...", "I was impressed by..."). Open
-     directly with the specific detail itself, e.g. start from the
-     referral, the gap, or the specific fact, not a compliment.
+   Write a short, plain, copy-paste-ready cold outreach message, 2-3
+   sentences, from the rep TO the prospect. Structure:
+   1. Open directly with the single sharpest, most specific detail
+      available: a real opportunity signal, a stated fact, or a
+      notes-derived detail (attributed correctly per the rules above).
+      No throat-clearing, no compliments, no "I came across your
+      business."
+   2. State plainly what that detail suggests or what it could mean for
+      the prospect, in concrete cause-and-effect terms, not sales
+      language. No words like "exciting," "amazing," "thrilled," "love
+      to." State it the way a person would casually mention something
+      they noticed, not the way an ad would announce it.
+   3. Close with a brief, low-pressure invitation to talk, one short
+      sentence, no exclamation points, no urgency language.
+
+   The message must NEVER mention who the rep is, what company or team
+   the rep represents, or what the rep is offering. It should read as
+   if it could be sent by anyone doing outreach, focused entirely on
+   the PROSPECT and what was found. Do not name the rep's company. Do
+   not say "our team," "we offer," "we specialize in," or any variant.
+
+   The result should be genuinely ready to copy and paste with zero
+   edits: a rep should be able to send it exactly as written.
 
 If you were told the source could not be retrieved (no stated facts, no
 inferred signals, only notes), make company_snapshot say plainly that

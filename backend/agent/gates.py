@@ -190,6 +190,21 @@ def enforce_source_gate(
 
 REFERRAL_ROOTS = ("referr", "recommend", "introduc")
 
+# The referral always flows one direction in this product: someone
+# referred the REP to the PROSPECT, never the reverse, every prospect is
+# a cold-outreach target being contacted BY the rep, so "referred YOU
+# to..." addressed to the prospect is always backwards. Observed live:
+# "a happy customer referred you to Family Plumbing" read to Family
+# Plumbing (the prospect) as though they were referred to their own
+# company, nonsensical, and a new shape of the same identity-direction
+# confusion REP_IDENTITY_PHRASES exists for, this time in the referral
+# clause specifically. A fixed-root + "you to" check, not a company-name
+# check, so it has none of the proper-noun false-positive risk the
+# removed regex above had.
+_BACKWARDS_REFERRAL_PATTERN = re.compile(
+    r"\b(?:referr\w*|recommend\w*|introduc\w*)\w*\s+you\s+to\b", re.IGNORECASE
+)
+
 MEETING_REFERENCE_ROOTS = (
     "our call",
     "our conversation",
@@ -239,6 +254,34 @@ PROSPECT_ATTRIBUTION_ROOTS = (
 # referred to with a pronoun, so a bare, unconditional check is enough,
 # same pattern as MEETING_REFERENCE_ROOTS above.
 _THIRD_PERSON_PRONOUN_PATTERN = re.compile(r"\b(they|their|theirs|them)\b", re.IGNORECASE)
+
+# A third instance of the same identity-confusion failure this file
+# already has two other checks for (REFERRAL_ROOTS' sender/prospect
+# confusion, MEETING_REFERENCE_ROOTS' fabricated prior contact). Observed
+# live: the opener claimed "our team at Miller & Company can provide
+# exceptional accounting services", Miller & Company being the
+# PROSPECT's own name, taken straight from the stated facts, rendered
+# back as though the rep's own team. The rep's identity, company, or
+# offering should never appear in this text at all, regardless of
+# phrasing.
+#
+# An earlier version of this check also tried to catch "our/at
+# <Capitalized Name>" generically via regex, to flag the rep naming ANY
+# company as its own, not just the fixed phrases below. Dropped after
+# testing showed it flags legitimate capitalized words that aren't
+# company names at all ("our Tuesday call", "our Google reviews") since
+# capitalization alone can't distinguish a company name from a day of
+# the week or a brand the prospect legitimately owns. A bounded phrase
+# list has no false-positive surface and already covers every case
+# actually observed; a heuristic with a real false-positive rate is a
+# worse trade than a smaller list would be, this class of mistake being
+# survivable via the gate's retry-then-fallback either way.
+REP_IDENTITY_PHRASES = (
+    "our team",
+    "our company",
+    "we specialize in",
+    "we offer",
+)
 
 _GREETING_NAME_PATTERN = re.compile(r"\b(?:Hi|Hello|Hey)\s+([A-Z][a-zA-Z]+),")
 # A referral-root word followed, within the same clause-ish window, by a
@@ -305,15 +348,18 @@ def opener_gate_violations(
     THE OPENER GATE.
 
     Checks the outreach opener for concrete, previously-observed
-    fabrication patterns (unsupported referral, fabricated prior meeting,
-    a fabricated claim that the prospect said something to the rep,
-    third-person reference to the prospect instead of direct address, a
-    greeted or referral-attributed name not present anywhere it was given
-    to us) and verifies each is actually grounded in what the rep gave
-    us. Returns a list of violation descriptions; an empty list means the
-    opener passes. This targets a bounded, named set of risks, it is not
-    a general hallucination detector, and claims outside these patterns
-    are not checked here.
+    fabrication patterns (unsupported referral, a backwards-direction
+    referral describing the prospect as referred somewhere rather than
+    the rep being referred to the prospect, fabricated prior meeting, a
+    fabricated claim that the prospect said something to the rep,
+    third-person reference to the prospect instead of direct address, the
+    rep stating its own team/company/offering, a greeted or
+    referral-attributed name not present anywhere it was given to us) and
+    verifies each is actually grounded in what the rep gave us. Returns a
+    list of violation descriptions; an empty list means the opener
+    passes. This targets a bounded, named set of
+    risks, it is not a general hallucination detector, and claims outside
+    these patterns are not checked here.
     """
     violations: list[str] = []
 
@@ -322,6 +368,15 @@ def opener_gate_violations(
     ):
         violations.append(
             "mentions a referral/recommendation not present in the rep's notes"
+        )
+
+    if _BACKWARDS_REFERRAL_PATTERN.search(outreach_opener):
+        # See _BACKWARDS_REFERRAL_PATTERN: the referral only ever flows
+        # rep-to-prospect in this product, "referred you to" is always
+        # backwards, regardless of what the notes say.
+        violations.append(
+            "describes the prospect as referred to somewhere/someone, backwards, "
+            "the rep is the one who was referred to the prospect"
         )
 
     if _contains_any(outreach_opener, MEETING_REFERENCE_ROOTS):
@@ -348,6 +403,13 @@ def opener_gate_violations(
         violations.append(
             f'refers to the prospect in the third person ("{third_person_match.group(0)}") '
             "instead of addressing them directly as \"you\"/\"your\""
+        )
+
+    if _contains_any(outreach_opener, REP_IDENTITY_PHRASES):
+        # See REP_IDENTITY_PHRASES: the rep's own identity/offering should
+        # never appear in this text, full stop, regardless of phrasing.
+        violations.append(
+            "states the rep's own team/company/offering, which should never appear in this text"
         )
 
     haystack = (raw_notes + " " + " ".join(f.quote for f in stated_facts)).lower()

@@ -146,6 +146,24 @@ class TestOpenerGateViolations:
         notes = "Referred by a customer of theirs."
         assert opener_gate_violations(opener, notes, []) == []
 
+    def test_backwards_referral_direction_is_flagged(self):
+        # Live case: the referral only ever flows rep-to-prospect in this
+        # product, but the opener described the prospect as referred TO
+        # their own company, nonsensical to the person receiving it.
+        opener = (
+            "I understand a happy customer referred you to Family Plumbing, "
+            "and I'd love to discuss how you've maintained such a strong "
+            "reputation over 20 years."
+        )
+        notes = "Referred to Family Plumbing by one of their customers, a happy repeat client."
+        violations = opener_gate_violations(opener, notes, [])
+        assert any("backwards" in v for v in violations)
+
+    def test_correct_referral_direction_is_not_flagged(self):
+        opener = "I understand a happy customer referred me to you, and I'd love to discuss how you've maintained such a strong reputation."
+        notes = "Referred by a happy repeat client."
+        assert opener_gate_violations(opener, notes, []) == []
+
     def test_meeting_reference_always_flagged_even_if_in_notes(self):
         # There's no legitimate data source for "we already spoke" in a
         # cold-outreach product, this is fabricated whenever it appears.
@@ -200,6 +218,35 @@ class TestOpenerGateViolations:
         opener = "I understand a happy customer referred me to you, and I'd love to discuss how you've maintained such a strong reputation."
         notes = "Referred by a happy repeat client."
         assert opener_gate_violations(opener, notes, []) == []
+
+    def test_rep_identity_claim_is_flagged(self):
+        # Live case: the opener claimed "our team at Miller & Company",
+        # Miller & Company being the PROSPECT's own name from the stated
+        # facts, rendered back as though it were the rep's own team.
+        opener = (
+            "I'd love to discuss how our team at Miller & Company can provide "
+            "exceptional accounting services tailored to your needs."
+        )
+        violations = opener_gate_violations(opener, "small accounting practice", [])
+        assert any("own team/company/offering" in v for v in violations)
+
+    def test_we_offer_is_flagged(self):
+        opener = "We offer exceptional accounting services tailored to your needs."
+        assert any(
+            "own team/company/offering" in v
+            for v in opener_gate_violations(opener, "notes", [])
+        )
+
+    def test_capitalized_word_after_our_is_not_flagged(self):
+        # Regression: an earlier version tried to catch "our <Capitalized
+        # Name>" generically via regex and produced false positives on
+        # ordinary capitalized words that aren't company names at all.
+        openers = [
+            "I understand our Tuesday call got moved, no worries.",
+            "Noticed you don't have a way to track our Google reviews.",
+        ]
+        for opener in openers:
+            assert opener_gate_violations(opener, "notes", []) == []
 
     def test_ungrounded_greeting_name_is_flagged(self):
         opener = "Hi Sarah, noticed you don't have a pricing page."
