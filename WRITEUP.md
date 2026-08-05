@@ -70,3 +70,7 @@ About 2-3 days  of focused, tightly scoped work.
 - **The 70B model**, if Groq's free-tier limits allow it without hurting reliability.
 - **Multi-page fetching.** `fetch_source` only reads the URL it's given; crawling a small set of
   same-site links (pricing, about) would surface more of what the gates are built to catch.
+- **A "thin content" mode.** Signal quality is strongest on sites with real marketing copy to
+  reason over; sparse or catalog-style pages can push the model toward generic, repetitive claims
+  despite the prompt's explicit instruction against it — worth a stronger content-length check that
+  triggers a distinct mode instead of treating every site the same.

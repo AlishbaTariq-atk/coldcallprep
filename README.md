@@ -15,7 +15,8 @@ The core discipline is enforced in code, not just prompted for:
 
 - **Opportunity Gate** (`backend/agent/gates.py::opportunity_gate`), an
   inferred signal only enters the brief if it has both a signal type and
-  a non-empty reasoning string.
+  a non-empty reasoning string; the surviving signals are then deduped
+  and capped at 5.
 - **Source Gate** (`source_is_usable` / `enforce_source_gate`), if the
   site fetch fails or returns near-empty content, the brief says so
   explicitly instead of inventing facts to fill the gap.
@@ -197,7 +198,7 @@ source .venv/bin/activate
 pytest tests/ -v
 ```
 
-65 tests, all pure unit tests, no API key or network access required.
+78 tests, all pure unit tests, no API key or network access required.
 This is where the three gates are proven correct in isolation.
 
 ## Isolated tool scripts

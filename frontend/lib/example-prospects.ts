@@ -21,12 +21,6 @@ export const EXAMPLE_PROSPECTS: ExampleProspect[] = [
       "Small accounting practice, mostly serves local small-business owners. Likely booked via phone/email rather than any online scheduling tool.",
   },
   {
-    label: "Limelight (Pakistani fashion retailer)",
-    url: "https://www.limelight.pk/?srsltid=AfmBOopmq1Bem9VxYFaXHg-dqjIfnKbwdDdqX7YLPLe4MB6wVn1tf8S0",
-    raw_notes:
-      "Popular Pakistani fast-fashion retailer, curious about their online presence and customer engagement.",
-  },
-  {
     label: "Bourke Street Bakery (Sydney)",
     url: "https://bourkestreetbakery.com.au",
     raw_notes:
