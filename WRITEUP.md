@@ -2,40 +2,71 @@
 
 ## The problem
 
-Researching a prospect properly before a cold call takes 30–45 minutes: reading the site, figuring out what's actually worth mentioning, drafting an opener that doesn't sound like a template. Most reps skip it, so outreach stays generic. The AI research tools that promise to fix this create a worse problem than the one they solve: they blend what a company actually says about itself with what the model is guessing about them, in the same paragraph, in the same confident tone. A rep reading a brief like that can't tell which sentence is safe to repeat on a call and which is a hallucination waiting to happen. So the brief either gets read skeptically, which defeats the point, or trusted blindly, until it's wrong in front of a prospect.
+Cold outreach is either generic or expensive to personalize: researching a prospect properly takes
+30–45 minutes per company, reading the site, figuring out what's actually worth mentioning,
+drafting an opener that isn't a template. The AI tools that promise to shortcut this create a worse
+problem than the one they solve: they blend what a company actually says about itself with what the
+model is guessing, in the same paragraph, in the same confident tone. A rep can't tell which line is
+safe to repeat on a call and which is a hallucination.
 
-ColdCallPrep is built around one discipline: never blend the two. Every claim in the output is either a direct quote pulled from the prospect's site or a labeled inference with its reasoning shown next to it, never stated as fact without one of those two labels.
+ColdCallPrep is built around one rule: never blend the two. Every claim in the output is either a
+direct quote from the prospect's own site or a labeled inference with its reasoning shown alongside
+it, never stated as fact without one of those two labels.
 
 ## How the harness is designed
 
-It's a LangGraph pipeline (`fetch_source → extract_stated_facts → infer_opportunity_signals → generate_brief`) with a hard rule: nothing an LLM produces is trusted until it passes a plain Python function, called after the model runs and before the output can enter state or reach the user. Enforcing the fact/inference discipline in code, not in the prompt, was the main design decision of the whole project. A model can be told not to blend fact and guess, and it will still do it under the right pressure; a gate that rejects the output can't be talked out of it.
+It's a LangGraph pipeline (`fetch_source → extract_stated_facts → infer_opportunity_signals →
+generate_brief`) where nothing an LLM produces is trusted until a plain Python gate checks it,
+called after the model runs, before the output reaches state or the user.
 
-- **Five sources, only one asks a model to write freely.** `fetch_source` does an HTTP fetch and nothing else, no LLM, with retries (transient DNS/connection blips are common and shouldn't trip the Source Gate on their own) and a realistic browser User-Agent so ordinary bot-mitigation doesn't false-positive-block it. `extract_stated_facts` pulls direct quotes, categorized as services/positioning/target_audience. `infer_opportunity_signals` proposes candidate opportunity signals but is *ungated by design*, its own output is untrusted until it passes the Opportunity Gate elsewhere. `technical_signals` never touches an LLM at all: it turns measured page-load time, a missing mobile-viewport meta tag, mixed-content warnings, and a small sample of broken links, all pulled directly from the HTTP response, into signals in code, because asking a model to guess at a load time would just reintroduce the accuracy problem the gates exist to prevent. `generate_brief` is the only step that writes prose.
-
-- **The Opportunity Gate** rejects any candidate signal missing either a signal type or a non-empty reasoning string, no partial credit. A second backstop, `filter_contradicted_signals`, drops any signal that contradicts code-verified page evidence. This exists because live testing caught `infer_opportunity_signals` claiming "no social media links" on a page that had working, visible social icons, worse, the model's own reasoning text acknowledged that the code-verified evidence said links were found, then proposed the signal anyway ("...but they are not visible on the website itself"), under a signal type that didn't match the filter's first, narrower exact-phrase check at all. The fix wasn't a better prompt, it's keyword-plus-negation matching in code that can't be dodged by rewording.
-
-- **The Source Gate** decides whether the fetched content is actually usable (fetch succeeded, and at least 200 characters came back). If not, the brief says so explicitly ("Built from your notes only, couldn't retrieve site content.") instead of quietly inventing site content to fill the gap. This is enforced in code as a final pass over the assembled `brief_text`, regardless of whether the model remembered to mention the gap itself.
-
-- **The Opener Gate** exists because live testing kept surfacing the same failure: a small, fast model asked not to fabricate cold-outreach boilerplate will fabricate it anyway. First it confused sender and prospect identity ("our accounting practice"). Then it invented a referral, "I was referred to your business by a trusted colleague," when nothing in the rep's notes mentioned one, a failure that survived three separate rounds of prompt tightening. Then, after that case was fixed, it invented a *name* for a real but nameless referral ("our mutual contact, Alex" when the notes said only "referred by a mutual contact"), not caught by the existing greeting-name check since it wasn't phrased as a "Hi {Name}," greeting. Most recently: a referral mentioned in the notes pulled the model into third-person drift for the rest of the opener ("they've been a trusted name...") instead of addressing the prospect directly, and separately, a backwards-direction referral bug where "a happy customer referred you to Family Plumbing" read to Family Plumbing (the prospect) as though *they* were referred to their own company, and a rep-identity bug where the model reused the prospect's own name from the stated facts as if it were the rep's team ("our team at Miller & Company"). Every one of these was tried as a prompt fix first and failed on retest. The gate now checks all of them in code, ungrounded referral mentions, backwards referral direction, fabricated prior meetings, prospect-attribution phrasing ("as you mentioned"), third-person pronouns instead of direct address, the rep naming its own team/company/offering, and a greeted-or-attributed name not present in the notes or facts, with one retry that names the specific violation, then a plain code-templated fallback that relays the notes verbatim and structurally cannot fabricate anything.
-
-- **`generate_brief` runs as an isolated deepagents subagent**, not another call in the same chain. Every other node in the graph shares one Python process with the raw fetched HTML sitting in local state variables. If brief-writing were just another step in that chain, nothing would stop a future edit to that file from accidentally handing it `raw_content` directly, or from a shared conversation history letting exploratory reasoning about the site leak into the brief. deepagents' `create_sub_agent` builds `brief_writer` with a message history that starts fresh on every invocation, a single task-description `HumanMessage` in, nothing inherited, and `raw_content` was never put into any state that call had access to in the first place, so the isolation is guaranteed by the framework, not by our own discipline to keep remembering it. It's also the result of benchmarking a design decision instead of assuming it: an earlier version routed this through a deepagents orchestrator whose only job was to unconditionally delegate to `brief_writer` via a `task` tool call. Measured live, that orchestrator hop alone accounted for roughly 95 of the ~100 seconds spent in this node; direct invocation of the same subagent, same prompt, same isolation guarantee, completed the full pipeline in under 3 seconds. The isolation was never coming from the orchestrator, it comes from the subagent's fresh message history and from `raw_content` never being reachable from `generate_brief()` in the first place, so removing the orchestrator cut this node's latency roughly 5-35x with no loss of the isolation guarantee.
-
-- **Model choice is a named tradeoff, not a default.** The pipeline runs on Groq's `llama-3.1-8b-instant` rather than the 70B model. The 70B model is more reliable at following strict negative constraints (identity confusion, fabrication) but has a low free-tier daily token cap. The Opener Gate is the real backstop regardless of which model is active, but a better baseline model means the gate has less work to do. `MODEL_NAME` is read from a `GROQ_MODEL_NAME` env var specifically so it can be swapped from Railway's dashboard, no code push or redeploy, if the 8B model's rate limits get hit close to a deadline.
-
-The invariant this whole design serves: every claim in the final brief is either a direct quote or a labeled inference with its reasoning attached, never stated as fact without one of those two labels.
+- **Five sources, only one writes freely.** `fetch_source` is an HTTP fetch, no LLM involved.
+  `extract_stated_facts` pulls direct quotes. `infer_opportunity_signals` proposes candidate signals
+  but is deliberately ungated on its own, untrusted until the Opportunity Gate runs. `technical_signals`
+  never touches an LLM at all: load time, a missing mobile viewport tag, mixed content, and broken
+  links come straight from the HTTP response, in code. `generate_brief` is the only step that writes
+  prose.
+- **The Opportunity Gate** rejects any signal missing a type or reasoning, dedupes near-identical
+  repeats, and caps the result at 5, added after one live run returned 33 candidates that were
+  really just two claims repeated on a loop. A second check drops any signal that contradicts
+  code-verified page evidence (a model once claimed "no social links" on a page with visible ones).
+- **The Source Gate** forces an explicit "built from your notes only" disclaimer onto the brief, in
+  code, whenever the fetch fails or comes back too thin, regardless of whether the model remembered
+  to say so itself.
+- **The Opener Gate** exists because live testing kept catching the same class of failure: a fast
+  model told not to fabricate cold-outreach boilerplate does it anyway, a fake referral, an invented
+  referrer's name, a backwards-direction referral, third-person drift, the rep claiming the
+  prospect's own name as its own team. Each pattern is checked in code; a violation triggers one
+  retry, then a plain templated fallback that can't fabricate anything.
+- **`generate_brief` runs as an isolated deepagents subagent**, not another call in the shared
+  pipeline. It gets a fresh message history built by the framework, a single task description in,
+  nothing inherited, and the raw fetched HTML was never in its reach to begin with, so the "nothing
+  is stated as fact unless it's traceable" guarantee doesn't depend on remembering to be careful
+  later. An earlier version routed this through an orchestrator agent whose only job was to delegate
+  to it; that hop alone accounted for ~95 of ~100 seconds per brief. Removing it kept the same
+  isolation and cut latency 5–35x.
+- **Model choice is a deliberate tradeoff.** Runs on Groq's `llama-3.1-8b-instant` rather than the
+  70B model, which is more reliable on strict negative constraints but has a much lower free-tier
+  token cap. The Opener Gate is the real backstop either way; the 70B model is one env var away if
+  the cap becomes the bottleneck.
 
 ## What it does
 
-A rep pastes a company URL and, optionally, whatever they already know: how the lead came in, a referral, a hunch. ColdCallPrep fetches the site and returns a brief with three parts: the direct quotes the company makes about itself, the opportunity signals that survived both gates (the count varies with what's actually on the site, zero is a correct and expected outcome on a strong site, the prompt explicitly treats padding a weak list to hit a number as a worse outcome than an honest empty one), and an outreach opener. Any detail in that opener that comes only from the rep's notes, not from the site, is written with visible attribution from the rep's own perspective ("I understand you're already..."), never stated with the same unlabeled confidence as something the pipeline actually verified, and never phrased as though the prospect said it to the rep. If the site can't be fetched at all, the brief says so up front instead of guessing.
+A rep pastes a company URL and optional notes. ColdCallPrep returns a brief: the company's own
+stated facts as direct quotes, opportunity signals that survived both gates (the count varies with
+the site, zero is a valid, expected outcome, not a failure), and an outreach opener. Any detail
+pulled only from the rep's notes is attributed to the rep's own understanding, never phrased as an
+independent observation or as something the prospect said.
 
 ## How long it took
 
-Roughly a weekend of focused, tightly scoped work: an initial session for the Next.js/Supabase scaffold and a bare FastAPI smoke-test deploy, a second for the LangGraph pipeline and the three gates, and a couple more short sessions to harden the gates against live-observed failures, add Supabase persistence, fix a deploy issue, and cut a real latency problem before wrapping up.
+About 2-3 days  of focused, tightly scoped work.
 
 ## What I'd build next
 
-- **A history view.** Every completed run is already persisted to Supabase (`prospects` + `briefs`), but the frontend only ever shows the most recent one, it never reads past runs back.
-- **CORS scoped to the real domain.** It's deliberately wide open (`allow_origins=["*"]`) for the demo right now, worth tightening to the production frontend URL once that's stable.
-- **A closer look at generation latency if it recurs.** The orchestrator-removal fix cut this dramatically, but it's worth a few more timed live runs to confirm the ~2-minute cases some earlier tests hit don't come back under load.
-- **The 70B model**, if Groq's free-tier limits allow it without jeopardizing reliability, already wired up behind `GROQ_MODEL_NAME`, just not yet the default.
-- **Multi-page fetching.** `fetch_source` reads exactly the URL it's given. A pricing or about page one click away is invisible to the pipeline right now; crawling a small, bounded set of same-site links would surface a lot more of what these gates are designed to catch.
+- **A history view.** Every run is already persisted to Supabase (`prospects` + `briefs`); the
+  frontend doesn't read past runs back yet.
+- **CORS scoped to the real domain**, once there's a stable production frontend URL.
+- **A closer look at generation latency** if the ~2-minute cases some early tests hit recur.
+- **The 70B model**, if Groq's free-tier limits allow it without hurting reliability.
+- **Multi-page fetching.** `fetch_source` only reads the URL it's given; crawling a small set of
+  same-site links (pricing, about) would surface more of what the gates are built to catch.
