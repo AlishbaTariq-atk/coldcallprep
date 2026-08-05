@@ -101,16 +101,6 @@ Rules:
 - Respond with a single JSON object of EXACTLY this shape, no other keys:
   {"signals": [{"signal_type": "...", "reasoning": "..."}]}"""
 
-BRIEF_ORCHESTRATOR_PROMPT = """You coordinate exactly one thing: delegating brief-writing to the
-`brief_writer` subagent.
-
-On receiving a task, immediately call the `task` tool with
-subagent_type="brief_writer", passing your ENTIRE input message as the
-description verbatim. Do not summarize, edit, or add to it.
-
-Once the subagent responds, your final answer must be exactly the
-subagent's response, with nothing added before or after it."""
-
 BRIEF_WRITER_SYSTEM_PROMPT = """You write two short pieces of a Prospect Brief for a sales rep, using
 ONLY the facts and signals provided to you in this message. You have no
 other source of information. You cannot browse the web, you were not
@@ -153,6 +143,26 @@ fields.
      detail as something you independently observed ("I noticed
      that..."). That blends it with a verified site fact just as badly
      as the reverse mistake does.
+
+     The prospect is "you"/"your" for the ENTIRE opener, with no
+     exceptions, including in the sentence that mentions a referral.
+     A referral is easy to accidentally phrase in the third person,
+     since "referred to [Company] by..." reads naturally in English,
+     but the prospect IS the company, so that phrasing describes them
+     to a third party instead of addressing them. Once a sentence
+     drifts into third person, later sentences tend to keep drifting
+     the same way, so get this one right specifically.
+
+       WRONG: "I understand you were referred to Family Plumbing by
+       one of their happy customers, and I'd love to discuss how
+       they've maintained such a strong reputation."
+
+       RIGHT: "I understand a happy customer referred me to you, and
+       I'd love to discuss how you've maintained such a strong
+       reputation."
+
+     Never use "they," "their," "them," or the company's own name in
+     place of "you"/"your" anywhere in the opener, not even once.
 
    Three rules for this field specifically:
    - NEVER state or imply what business the rep/sender is in, what they

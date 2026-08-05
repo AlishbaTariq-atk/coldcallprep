@@ -23,17 +23,32 @@ would then depend on us remembering to be careful every time this file
 changes.
 
 deepagents' subagent pattern makes that structurally impossible instead
-of relying on our discipline. When the orchestrator's `task` tool invokes
-the `brief_writer` subagent, deepagents resets the subagent's message
-history to a single HumanMessage containing only the task description we
-constructed (see `_validate_and_prepare_state` in
-deepagents/middleware/subagents.py), it does NOT inherit the
-orchestrator's transcript. Combined with the fact that we never put
-raw_content into any state the orchestrator holds in the first place,
-brief_writer's context is guaranteed by the framework to be exactly what
-tools.generate_brief() decided to pass it: pre-gated stated_facts,
-pre-gated inferred_signals, and raw_notes. Nothing else is reachable, even
-as this pipeline grows more tools or reasoning steps upstream later.
+of relying on our discipline. `tools._build_brief_writer()` builds the
+`brief_writer` subagent via deepagents' own `create_sub_agent`, and it is
+invoked directly with a single HumanMessage containing only the task
+description tools.generate_brief() constructed, no shared conversation
+for it to inherit from, and raw_content was never put into any state that
+call had access to in the first place. brief_writer's context is
+guaranteed by the framework to be exactly what generate_brief() decided
+to pass it: pre-gated stated_facts, pre-gated inferred_signals, and
+raw_notes. Nothing else is reachable, even as this pipeline grows more
+tools or reasoning steps upstream later.
+
+--- Why there's no orchestrator agent in front of it ---
+
+Earlier versions of this pipeline routed through a deepagents
+orchestrator whose entire job was calling a `task` tool to delegate to
+brief_writer, unconditionally, every time. That's a second LLM asked to
+make a decision that was never actually in question, and it cost far
+more than its prompt size suggested: measured live, the orchestrator hop
+alone accounted for roughly 95 of ~100 seconds spent in this node, while
+direct invocation of the same subagent, same prompt, same isolation
+guarantee, completed in under 3 seconds for the full pipeline. The
+isolation this section describes was never coming from the orchestrator;
+it comes from create_sub_agent's fresh, framework-built message history
+and from raw_content never being reachable from generate_brief() in the
+first place. Removing the orchestrator removed a redundant, unconditional
+delegation step, not the isolation itself.
 """
 
 from __future__ import annotations

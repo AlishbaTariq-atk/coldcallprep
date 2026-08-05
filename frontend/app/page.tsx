@@ -44,8 +44,7 @@ export default function Home() {
         <p className="mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground">
           Every claim in a brief is either a direct quote from the
           prospect&apos;s site or a labeled inference with its reasoning
-          shown next to it, enforced in code before it ever reaches you,
-          not just prompted for.
+          shown next to it.
         </p>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[380px_1fr]">

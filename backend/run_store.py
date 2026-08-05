@@ -29,12 +29,19 @@ STEP_LABELS: dict[RunStepName, str] = {
 
 @dataclass
 class RunStep:
-    """A single pipeline step's progress, as shown in the frontend's progress strip."""
+    """A single pipeline step's progress, as shown in the frontend's progress strip.
+
+    started_at and finished_at are tracked separately (not one field
+    overwritten in place) specifically so the frontend can show a real,
+    measured duration per step once it's done, and a live elapsed timer
+    while it's still running.
+    """
 
     name: RunStepName
     label: str
     status: Literal["in_progress", "done", "error"]
-    at: str
+    started_at: str
+    finished_at: Optional[str] = None
 
 
 @dataclass
@@ -84,7 +91,12 @@ def start_step(run_id: str, name: RunStepName) -> None:
         run = _runs[run_id]
         run.status = "running"
         run.steps.append(
-            RunStep(name=name, label=STEP_LABELS[name], status="in_progress", at=_now())
+            RunStep(
+                name=name,
+                label=STEP_LABELS[name],
+                status="in_progress",
+                started_at=_now(),
+            )
         )
 
 
@@ -101,7 +113,7 @@ def finish_step(run_id: str, name: RunStepName, *, error: bool = False) -> None:
         for step in reversed(run.steps):
             if step.name == name and step.status == "in_progress":
                 step.status = "error" if error else "done"
-                step.at = _now()
+                step.finished_at = _now()
                 return
 
 

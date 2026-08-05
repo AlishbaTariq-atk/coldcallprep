@@ -225,10 +225,25 @@ PROSPECT_ATTRIBUTION_ROOTS = (
     "per your message",
 )
 
+# The opener is addressed directly TO the prospect throughout, so the
+# prospect is always "you"/"your", never "they"/"their"/"them". Observed
+# live: a referral mentioned in the rep's notes ("referred by one of
+# their customers") pulled the model into third-person phrasing for the
+# REST of the opener too, describing the prospect to a third party
+# ("they've been a trusted name...") instead of addressing them directly,
+# even though BRIEF_WRITER_SYSTEM_PROMPT already states the "you" rule
+# explicitly. This makes the opener unusable as a direct copy-paste
+# message. There is no legitimate case for this product to describe the
+# prospect in the third person, including when a referrer is mentioned,
+# the referrer should be named directly ("Jane mentioned...") rather than
+# referred to with a pronoun, so a bare, unconditional check is enough,
+# same pattern as MEETING_REFERENCE_ROOTS above.
+_THIRD_PERSON_PRONOUN_PATTERN = re.compile(r"\b(they|their|theirs|them)\b", re.IGNORECASE)
+
 _GREETING_NAME_PATTERN = re.compile(r"\b(?:Hi|Hello|Hey)\s+([A-Z][a-zA-Z]+),")
 # A referral-root word followed, within the same clause-ish window, by a
-# capitalized name-like token, catches "referred by our mutual contact,
-# Alex" without requiring a specific sentence structure. Bounded and
+# capitalized name-like token, catches "referred by our mutual contact,"
+#  without requiring a specific sentence structure. Bounded and
 # heuristic by design, matching this file's other keyword+proximity
 # checks, not a general named-entity extractor.
 _REFERRAL_NAME_PATTERN = re.compile(
@@ -291,7 +306,8 @@ def opener_gate_violations(
 
     Checks the outreach opener for concrete, previously-observed
     fabrication patterns (unsupported referral, fabricated prior meeting,
-    a fabricated claim that the prospect said something to the rep, a
+    a fabricated claim that the prospect said something to the rep,
+    third-person reference to the prospect instead of direct address, a
     greeted or referral-attributed name not present anywhere it was given
     to us) and verifies each is actually grounded in what the rep gave
     us. Returns a list of violation descriptions; an empty list means the
@@ -322,6 +338,16 @@ def opener_gate_violations(
         # violation regardless of notes content, see PROSPECT_ATTRIBUTION_ROOTS.
         violations.append(
             "implies the prospect said something to the rep, which never happened"
+        )
+
+    third_person_match = _THIRD_PERSON_PRONOUN_PATTERN.search(outreach_opener)
+    if third_person_match:
+        # See _THIRD_PERSON_PRONOUN_PATTERN: the opener addresses the
+        # prospect directly, so any third-person reference to them, even
+        # when describing a referral, means it can't be sent as-is.
+        violations.append(
+            f'refers to the prospect in the third person ("{third_person_match.group(0)}") '
+            "instead of addressing them directly as \"you\"/\"your\""
         )
 
     haystack = (raw_notes + " " + " ".join(f.quote for f in stated_facts)).lower()

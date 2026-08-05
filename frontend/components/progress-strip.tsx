@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RunStatus, RunStepName } from "@/lib/types";
+import type { RunStatus, RunStep, RunStepName } from "@/lib/types";
 
 const STEP_ORDER: { name: RunStepName; label: string }[] = [
   { name: "fetching_source", label: "Fetching site" },
@@ -17,13 +18,47 @@ interface ProgressStripProps {
   status: RunStatus | null;
 }
 
+/** Format a millisecond duration as a short string, e.g. "0.4s" or "1m 12s". */
+function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainderSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainderSeconds}s`;
+}
+
+/**
+ * Elapsed time for one step: measured (finished_at - started_at) once
+ * done, or live (now - started_at) while still in progress. Both are
+ * real backend timestamps, this is never a synthetic/animated duration.
+ */
+function stepDurationMs(step: RunStep, now: number): number | null {
+  const startedAt = new Date(step.started_at).getTime();
+  if (step.status === "in_progress") {
+    return now - startedAt;
+  }
+  if (step.finished_at) {
+    return new Date(step.finished_at).getTime() - startedAt;
+  }
+  return null;
+}
+
 /**
  * Renders directly from status.steps, which only ever contains steps the
  * backend has actually recorded (see run_store.py), there is nothing
- * here on a timer faking progress the pipeline hasn't reached yet.
+ * here on a timer faking progress. Durations shown per step are real
+ * measured timestamps from the backend, not a UI animation, only the
+ * "now" used for the live in-progress timer ticks locally.
  */
 export function ProgressStrip({ status }: ProgressStripProps) {
   const steps = status?.steps ?? [];
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!steps.some((s) => s.status === "in_progress")) return;
+    const interval = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(interval);
+  }, [steps]);
 
   return (
     <div className="rounded-lg border bg-card px-5 py-4">
@@ -32,22 +67,30 @@ export function ProgressStrip({ status }: ProgressStripProps) {
           const recorded = steps.find((s) => s.name === step.name);
           const state: StepState = recorded?.status ?? "pending";
           const isLast = index === STEP_ORDER.length - 1;
+          const durationMs = recorded ? stepDurationMs(recorded, now) : null;
 
           return (
             <li key={step.name} className={cn("flex items-center", !isLast && "flex-1")}>
               <div className="flex items-center gap-2">
                 <StepIcon state={state} />
-                <span
-                  className={cn(
-                    "text-sm transition-colors duration-300",
-                    state === "pending" && "text-muted-foreground/60",
-                    state === "in_progress" && "font-medium text-primary",
-                    state === "done" && "text-foreground",
-                    state === "error" && "font-medium text-destructive"
+                <div className="flex flex-col leading-tight">
+                  <span
+                    className={cn(
+                      "text-sm transition-colors duration-300",
+                      state === "pending" && "text-muted-foreground/60",
+                      state === "in_progress" && "font-medium text-primary",
+                      state === "done" && "text-foreground",
+                      state === "error" && "font-medium text-destructive"
+                    )}
+                  >
+                    {step.label}
+                  </span>
+                  {durationMs !== null && (
+                    <span className="text-xs tabular-nums text-muted-foreground/70">
+                      {formatDuration(durationMs)}
+                    </span>
                   )}
-                >
-                  {step.label}
-                </span>
+                </div>
               </div>
               {!isLast && (
                 <div

@@ -173,6 +173,34 @@ class TestOpenerGateViolations:
         opener = "I understand you're already booked solid most weeks."
         assert opener_gate_violations(opener, "Booked solid most weeks.", []) == []
 
+    def test_third_person_drift_after_referral_is_flagged(self):
+        # Live case: a referral mentioned in the notes pulled the model into
+        # describing the prospect to a third party for the rest of the
+        # opener too, instead of addressing them directly.
+        opener = (
+            "I understand you were referred to Family Plumbing by one of "
+            "their happy customers, and I'd love to discuss how they've "
+            "maintained such a strong reputation."
+        )
+        notes = "Referred to Family Plumbing by one of their customers, a happy repeat client."
+        violations = opener_gate_violations(opener, notes, [])
+        assert any("third person" in v for v in violations)
+
+    def test_bare_their_is_flagged(self):
+        opener = "I understand their team is booked solid most weeks."
+        violations = opener_gate_violations(opener, "Booked solid most weeks.", [])
+        assert any("third person" in v for v in violations)
+
+    def test_bare_them_is_flagged(self):
+        opener = "I'd love to help them grow their online presence."
+        violations = opener_gate_violations(opener, "some notes", [])
+        assert any("third person" in v for v in violations)
+
+    def test_second_person_referral_is_not_flagged(self):
+        opener = "I understand a happy customer referred me to you, and I'd love to discuss how you've maintained such a strong reputation."
+        notes = "Referred by a happy repeat client."
+        assert opener_gate_violations(opener, notes, []) == []
+
     def test_ungrounded_greeting_name_is_flagged(self):
         opener = "Hi Sarah, noticed you don't have a pricing page."
         notes = "Small business, no pricing page."

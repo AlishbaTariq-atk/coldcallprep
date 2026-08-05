@@ -42,7 +42,8 @@ export interface RunStep {
   name: RunStepName;
   label: string;
   status: "in_progress" | "done" | "error";
-  at: string;
+  started_at: string;
+  finished_at: string | null;
 }
 
 /**

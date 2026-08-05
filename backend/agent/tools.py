@@ -13,7 +13,8 @@ The four single-purpose tools described in the product brief:
      subagent; the stated-facts and inferred-signals sections are
      rendered directly from typed state, in code, with no LLM involved.
      See agent/graph.py's module docstring for why isolating the
-     subagent's context is the right call here.
+     subagent's context is the right call here, and for why it's
+     invoked directly rather than through a delegating orchestrator.
 """
 
 from __future__ import annotations
@@ -24,14 +25,13 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from deepagents import create_deep_agent
-from langchain_core.messages import HumanMessage, ToolMessage
+from deepagents.middleware.subagents import create_sub_agent
+from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
 from pydantic import BaseModel
 
 from agent.gates import opener_gate_violations
 from agent.prompts import (
-    BRIEF_ORCHESTRATOR_PROMPT,
     BRIEF_WRITER_SYSTEM_PROMPT,
     EXTRACT_FACTS_PROMPT,
     INFER_SIGNALS_PROMPT,
@@ -468,31 +468,36 @@ class BriefNarrative(BaseModel):
     outreach_opener: str
 
 
-def _build_brief_orchestrator(temperature: float = 0):
-    """Build the deepagents orchestrator that delegates to the isolated brief_writer subagent.
+def _build_brief_writer(temperature: float = 0):
+    """Build the isolated brief_writer subagent, invokable directly (no orchestrator).
+
+    Uses deepagents' own create_sub_agent, the same construction path deepagents'
+    task tool uses internally, so the subagent still gets a framework-built,
+    freshly-invoked message history every call. What's gone is the separate
+    orchestrator agent that used to sit in front of it purely to decide to
+    delegate; that decision was never in question (BRIEF_ORCHESTRATOR_PROMPT
+    always delegated unconditionally), so it was a full extra LLM round-trip
+    for zero product value. See agent/graph.py's module docstring for the
+    full rationale and the measured timing difference.
 
     Args:
         temperature: Sampling temperature passed to the underlying model.
 
     Returns:
-        A compiled deepagents orchestrator with `brief_writer` as its only subagent.
+        A Runnable that returns {"messages": [...], "structured_response": BriefNarrative}.
     """
-    return create_deep_agent(
-        model=_build_model(temperature),
-        tools=[],
-        system_prompt=BRIEF_ORCHESTRATOR_PROMPT,
-        subagents=[
-            {
-                "name": "brief_writer",
-                "description": (
-                    "Writes the company snapshot and outreach opener "
-                    "from pre-gated stated facts and inferred signals."
-                ),
-                "system_prompt": BRIEF_WRITER_SYSTEM_PROMPT,
-                "tools": [],
-                "response_format": BriefNarrative,
-            }
-        ],
+    return create_sub_agent(
+        {
+            "name": "brief_writer",
+            "description": (
+                "Writes the company snapshot and outreach opener "
+                "from pre-gated stated facts and inferred signals."
+            ),
+            "system_prompt": BRIEF_WRITER_SYSTEM_PROMPT,
+            "tools": [],
+            "model": _build_model(temperature),
+        },
+        response_format=BriefNarrative,
     )
 
 
@@ -507,12 +512,13 @@ def _render_stated_facts(stated_facts: list[StatedFact]) -> str:
     """
     if not stated_facts:
         return "(none, no stated facts were extracted.)"
-    # Single quotes, not double: this text gets embedded as a JSON string
-    # argument inside the orchestrator's `task` tool call, and unescaped
-    # double quotes there reliably triggered Groq's native tool-calling
-    # to emit malformed `<function=...>` text instead of a real tool
-    # call (observed live on both the 8B and 70B models). Single quotes
-    # don't need JSON escaping, sidestepping the bug entirely.
+    # Single quotes, not double: this text used to be JSON-argument-encoded
+    # inside an orchestrator's `task` tool call, where unescaped double
+    # quotes reliably triggered Groq's native tool-calling to emit
+    # malformed `<function=...>` text (observed live on both the 8B and
+    # 70B models). That specific path is gone now that brief_writer is
+    # invoked directly, but there's no reason to reintroduce double quotes
+    # for no benefit, so the safer format stays.
     return "\n".join(f"- [{f.category}] '{f.quote}'" for f in stated_facts)
 
 
@@ -627,23 +633,23 @@ def generate_brief(
 
 
 BRIEF_WRITER_MAX_ATTEMPTS = 3
-# Live testing showed this isn't a transient glitch: at temperature=0 the
-# model regenerates the exact same malformed `<function=...>` text on
-# every retry against the same prompt, a deterministic model produces a
-# deterministic failure, so retrying unchanged never helps. Only the
-# first attempt uses temperature=0 (matches every other call in this
-# pipeline); retries resample at a non-zero temperature specifically so
-# they have a real chance at producing well-formed tool-call syntax
-# instead of reproducing the identical failure.
+# Kept from the orchestrator-based version: live testing there showed
+# failures at temperature=0 weren't transient, the model reproduced the
+# identical malformed output on every unchanged retry, so only resampling
+# at a different temperature had a real chance of succeeding. Direct
+# invocation removes the specific failure that pattern was originally
+# observed on (malformed orchestrator tool-call syntax), but structured
+# output can still fail to parse for other reasons, so the same
+# resample-on-retry safeguard stays rather than assuming it's now unnecessary.
 BRIEF_WRITER_RETRY_TEMPERATURE = 0.4
 
 
 def _invoke_brief_writer(task_description: str) -> BriefNarrative:
-    """Run the brief_writer orchestrator, retrying with resampled temperature on failure.
+    """Invoke the isolated brief_writer subagent directly, retrying with resampled temperature.
 
     Args:
-        task_description: The full task description passed to the orchestrator
-            as a single HumanMessage.
+        task_description: The full task description passed to the subagent
+            as a single HumanMessage, its entire context.
 
     Returns:
         The subagent's structured narrative output.
@@ -655,11 +661,11 @@ def _invoke_brief_writer(task_description: str) -> BriefNarrative:
     for attempt in range(BRIEF_WRITER_MAX_ATTEMPTS):
         temperature = 0 if attempt == 0 else BRIEF_WRITER_RETRY_TEMPERATURE
         try:
-            orchestrator = _build_brief_orchestrator(temperature)
-            result = orchestrator.invoke(
+            brief_writer = _build_brief_writer(temperature)
+            result = brief_writer.invoke(
                 {"messages": [HumanMessage(content=task_description)]}
             )
-            return _extract_narrative(result)
+            return result["structured_response"]
         except Exception as exc:  # noqa: BLE001 - retry on any transient failure here
             last_error = exc
             if attempt < BRIEF_WRITER_MAX_ATTEMPTS - 1:
@@ -692,21 +698,4 @@ def _fallback_opener(raw_notes: str) -> str:
     return (
         "Reaching out to learn more about your business and see if "
         "there's a fit to work together."
-    )
-
-
-def _extract_narrative(result: dict) -> BriefNarrative:
-    """
-    Don't trust the orchestrator's own final message to be a faithful,
-    unedited relay of what the subagent wrote, extract the subagent's
-    actual structured output directly from the ToolMessage the `task`
-    call produced (deepagents JSON-serializes response_format results
-    into that ToolMessage's content).
-    """
-    for message in reversed(result["messages"]):
-        if isinstance(message, ToolMessage):
-            return BriefNarrative.model_validate_json(str(message.content))
-
-    raise RuntimeError(
-        "brief_writer subagent was never invoked, no ToolMessage found in result"
     )
