@@ -37,14 +37,40 @@ def opportunity_gate(candidate: CandidateSignal) -> InferredSignal | None:
     return InferredSignal(signal_type=signal_type, reasoning=reasoning)
 
 
+# INFER_SIGNALS_PROMPT tells the model "up to 5 signals is the ceiling,
+# never the goal", but that instruction had no code-level backstop.
+# Observed live: for one real site, infer_opportunity_signals returned 33
+# candidates, alternating between just two distinct claims repeated over
+# and over, a degenerate-repetition failure within a single
+# structured-output call, not 33 genuinely distinct findings. Dedup runs
+# before the cap so a repetition storm can't crowd out the real, distinct
+# signals a site can plausibly have; the cap after is a hard backstop
+# regardless of whether dedup alone would have been enough.
+MAX_OPPORTUNITY_SIGNALS = 5
+
+
 def gate_signals(candidates: list[CandidateSignal]) -> list[InferredSignal]:
-    """Apply the Opportunity Gate to a batch; only survivors come back."""
+    """Apply the Opportunity Gate to a batch: field validation, then dedup, then a count cap.
+
+    Args:
+        candidates: Raw, ungated candidates from infer_opportunity_signals.
+
+    Returns:
+        Field-valid, deduplicated signals, capped at MAX_OPPORTUNITY_SIGNALS,
+        in the order the model returned them.
+    """
     gated: list[InferredSignal] = []
+    seen: set[tuple[str, str]] = set()
     for candidate in candidates:
         signal = opportunity_gate(candidate)
-        if signal is not None:
-            gated.append(signal)
-    return gated
+        if signal is None:
+            continue
+        key = (signal.signal_type.strip().lower(), signal.reasoning.strip().lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        gated.append(signal)
+    return gated[:MAX_OPPORTUNITY_SIGNALS]
 
 
 # --- Opportunity Gate: contradiction filter ---------------------------------

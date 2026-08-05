@@ -1,8 +1,13 @@
 # ColdCallPrep
 
-A sales rep pastes a company URL (+ optional notes). ColdCallPrep fetches
+ColdCallPrep is a deep agent harness that fetches a prospect's website,
+quotes what they say about themselves, and flags gaps worth mentioning,
+so a sales rep can walk into a cold call with a research brief they can
+actually trust instead of a wall of AI-generated guesswork.
+
+A rep pastes a company URL (+ optional notes). ColdCallPrep fetches
 the site, quotes what the company literally says about itself, and
-separately flags opportunity signals inferred from what's missing ,
+separately flags opportunity signals inferred from what's missing,
 never blending the two. Every claim in the output is either a direct
 quote or a labeled inference with its reasoning shown alongside it.
 

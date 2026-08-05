@@ -5,6 +5,7 @@ prompt-enforced" claim in the product brief is literally true.
 """
 
 from agent.gates import (
+    MAX_OPPORTUNITY_SIGNALS,
     MIN_SOURCE_CONTENT_CHARS,
     SOURCE_GATE_DISCLAIMER,
     enforce_source_gate,
@@ -86,6 +87,45 @@ class TestGateSignals:
             CandidateSignal(signal_type="", reasoning="y"),
         ]
         assert gate_signals(candidates) == []
+
+    def test_exact_duplicate_candidates_are_collapsed_to_one(self):
+        # Live case: infer_opportunity_signals returned 33 candidates for
+        # one real site, alternating between just two distinct claims
+        # repeated over and over.
+        candidates = [
+            CandidateSignal(signal_type="unsupported_award_claim", reasoning="Claims to be the OG bakery."),
+            CandidateSignal(signal_type="unsupported_award_claim", reasoning="Claims to be the OG bakery."),
+            CandidateSignal(signal_type="unsupported_award_claim", reasoning="Claims to be the OG bakery."),
+        ]
+        result = gate_signals(candidates)
+        assert len(result) == 1
+
+    def test_duplicate_detection_is_case_and_whitespace_insensitive(self):
+        candidates = [
+            CandidateSignal(signal_type="no_pricing_page", reasoning="  No pricing anywhere.  "),
+            CandidateSignal(signal_type="NO_PRICING_PAGE", reasoning="No pricing anywhere."),
+        ]
+        assert len(gate_signals(candidates)) == 1
+
+    def test_same_signal_type_different_reasoning_both_kept(self):
+        # Distinct claims sharing a signal_type must not collide with the
+        # exact-duplicate check above.
+        candidates = [
+            CandidateSignal(signal_type="unsupported_award_claim", reasoning="Claims to be the OG bakery."),
+            CandidateSignal(
+                signal_type="unsupported_award_claim",
+                reasoning="Claims to be Sydney's most iconic food destination.",
+            ),
+        ]
+        assert len(gate_signals(candidates)) == 2
+
+    def test_result_is_capped_at_max_opportunity_signals(self):
+        candidates = [
+            CandidateSignal(signal_type=f"signal_{i}", reasoning=f"Distinct reasoning {i}.")
+            for i in range(20)
+        ]
+        result = gate_signals(candidates)
+        assert len(result) == MAX_OPPORTUNITY_SIGNALS
 
 
 class TestSourceIsUsable:

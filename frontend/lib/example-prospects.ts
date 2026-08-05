@@ -15,21 +15,21 @@ export interface ExampleProspect {
 
 export const EXAMPLE_PROSPECTS: ExampleProspect[] = [
   {
-    label: "Family-owned HVAC & plumbing company",
-    url: "https://www.866myfamily.com/",
-    raw_notes:
-      "Referred by a customer of theirs. Family-run, been around for years, not sure they have much of an online presence beyond the phone number.",
-  },
-  {
-    label: "Small seasonal donut shop",
-    url: "https://backdoordonuts.com/",
-    raw_notes:
-      "Local favorite with a huge word-of-mouth following, open late-night only. Curious whether they've ever invested in online ordering or marketing beyond the storefront.",
-  },
-  {
     label: "Independent CPA firm",
     url: "https://www.cpafirmnyc.com/",
     raw_notes:
       "Small accounting practice, mostly serves local small-business owners. Likely booked via phone/email rather than any online scheduling tool.",
+  },
+  {
+    label: "Limelight (Pakistani fashion retailer)",
+    url: "https://www.limelight.pk/?srsltid=AfmBOopmq1Bem9VxYFaXHg-dqjIfnKbwdDdqX7YLPLe4MB6wVn1tf8S0",
+    raw_notes:
+      "Popular Pakistani fast-fashion retailer, curious about their online presence and customer engagement.",
+  },
+  {
+    label: "Bourke Street Bakery (Sydney)",
+    url: "https://bourkestreetbakery.com.au",
+    raw_notes:
+      "Small independent neighborhood bakery, curious about their online ordering and delivery options.",
   },
 ];
