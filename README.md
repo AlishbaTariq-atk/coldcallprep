@@ -25,16 +25,57 @@ involved.
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    Rep(["Sales rep"])
+
+    subgraph Vercel["Vercel — frontend/"]
+        UI["Next.js UI"]
+        Proxy["Route Handlers<br/>/api/run · /api/run/:id/status"]
+    end
+
+    subgraph Railway["Railway — backend/ (one persistent FastAPI process)"]
+        Store[("run_store<br/>in-memory run progress")]
+
+        subgraph Pipeline["LangGraph pipeline"]
+            Fetch["fetch_source<br/>HTTP fetch only — no LLM"]
+            Gate1{"Source Gate<br/>content usable?"}
+            Extract["extract_stated_facts"]
+            Infer["infer_opportunity_signals"]
+            Gate2{{"Opportunity Gate +<br/>contradiction filter"}}
+            Tech["technical_signals<br/>load time / viewport / mixed content — no LLM"]
+            Generate["generate_brief"]
+            Sub[["brief_writer<br/>isolated deepagents subagent —<br/>no raw_content, no shared history"]]
+            Gate3{{"Opener Gate<br/>retry once, then code fallback"}}
+            Gate4{{"Source Gate<br/>enforced on final text"}}
+
+            Fetch --> Gate1
+            Gate1 -->|usable| Extract --> Infer --> Gate2
+            Gate1 -->|unusable| Generate
+            Fetch --> Tech --> Gate2
+            Gate2 --> Generate --> Sub --> Gate3 --> Gate4
+        end
+    end
+
+    Groq[("Groq<br/>llama-3.1-8b-instant")]
+    Supabase[("Supabase<br/>prospects + briefs")]
+
+    Rep -->|"URL + notes"| UI --> Proxy
+    Proxy -->|"POST /run<br/>GET /status/:id"| Store
+    Store --> Pipeline
+    Extract -.->|LLM call| Groq
+    Infer -.->|LLM call| Groq
+    Sub -.->|LLM call| Groq
+    Gate4 -->|"brief_text"| Supabase
+    Gate4 -->|result| Proxy
+    Proxy --> UI --> Rep
 ```
-Next.js frontend (frontend/)  →  FastAPI backend (backend/)  →  Groq LLM
-       │                              │
-       │                              └─ LangGraph pipeline:
-       │                                 fetch → extract → infer → generate
-       │                                 (generate_brief runs as an isolated
-       │                                  deepagents subagent)
-       │
-       └─ polls backend for live progress, renders the finished brief
-```
+
+Diamonds are routing decisions the graph itself makes (`route_after_fetch`);
+hexagons are the three code-enforced gates (`backend/agent/gates.py`) that
+sit between whatever the model produced and what the user is allowed to
+see. Dotted arrows are the only points in the whole pipeline that touch
+an LLM — `fetch_source` and `technical_signals` never do.
 
 The repo is a monorepo with two independent projects side by side:
 `frontend/` (Next.js) and `backend/` (FastAPI), plus a top-level
@@ -123,6 +164,25 @@ prospect with zero typing, then **Generate Brief**. The progress strip
 reflects real backend steps as they happen , the "Writing brief" step
 (an isolated LLM subagent call) is usually the slowest, taking up to
 ~30–60s.
+
+## Deployment
+
+Frontend and backend deploy independently, to Vercel and Railway
+respectively.
+
+**Vercel** — set **Root Directory** to `frontend` when importing this
+repo; Vercel may auto-detect `backend/` as a second deployable service,
+but don't accept that. The backend's in-memory run store and its
+background pipeline execution both need one persistent process, not
+serverless functions — that's what Railway is for. Add one environment
+variable: `BACKEND_URL`, pointing at the Railway backend's URL.
+
+**Railway** — deploys `backend/` via the included `Procfile`.
+`backend/.env` is gitignored and never reaches Railway, so
+`GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` must be
+set directly in Railway's dashboard (**Variables** tab). Without them
+the service builds and starts fine — `/health` will even return
+`200 OK` — but every real run fails at the first LLM call.
 
 ## Tests
 
